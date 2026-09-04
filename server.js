@@ -1735,6 +1735,11 @@ io.on('connection', (socket) => {
   socket.on('state', (data = {}) => {
     let player = players.get(socket.id);
     if (!player) return;
+    if ((player.hp ?? 100) <= 0) {
+      socket.emit('pvp_killed', { byName: 'Düşman' });
+      socket.emit('self_state', { hp: 0 });
+      return;
+    }
     const prevX = Number(player.x) || 0;
     const prevY = Number(player.y) || 0;
     const incomingX = Number(data.x);

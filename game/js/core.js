@@ -6111,6 +6111,8 @@ function _goToMenu() {
 function die() {
   if (_isDying) return; // already dying — ignore duplicate call
   _isDying = true;
+  player.dead = true;
+  player.hp = 0;
   _trapCaughtBy = null; // free from any trap on death
   _playerMoveTrail = []; // clear movement trail on death
   if (typeof bossTelegraphs !== 'undefined') bossTelegraphs.length = 0; // clear stale boss skill telegraphs on death
@@ -12796,8 +12798,9 @@ function initMultiplayer() {
     floatingTexts.push({ x: player.x, y: player.y - 50, text: '-' + dmg + ' ⚔️', alpha: 1, life: 35, color: '#ff3333' });
     _lastDamager = { typeName: fromName + ' (Oyuncu)' };
     updateHpBar();
-    // Do NOT call die() here — let pvp_killed handle death authoritatively
-    // (prevents double-die when both pvp_hit and pvp_killed arrive close together)
+    if (player.hp <= 0 && !_isDying) {
+      die();
+    }
   });
 
   // PvP: we hit someone — server authoritative confirm
@@ -13258,7 +13261,7 @@ function initMultiplayer() {
       }
       other.isAttacking = true;
       other.attackTimer = 1;
-      other.attackDuration = other.weapon === 2 ? 14 : 18;
+      other.attackDuration = ATTACK_DUR[other.weapon] || (other.weapon === 2 ? 14 : 18);
     }
   });
 
@@ -13935,7 +13938,12 @@ document.addEventListener('visibilitychange', () => {
       _bgTabHeartbeat = null;
     }
     _lastTime = performance.now();
-    if (_connected && _socket && player && !player.dead) {
+    // Tab became active: if player died while tabbed out, immediately ensure death screen is visible!
+    if (player && (player.dead || player.hp <= 0 || _isDying)) {
+      die();
+      const deathOverlay = document.getElementById('death-overlay');
+      if (deathOverlay) deathOverlay.classList.add('show');
+    } else if (_connected && _socket && player && !player.dead) {
       _mpUpdate();
     }
   }
