@@ -985,11 +985,11 @@
                             <span id="prof-user-id">ID: --</span><span class="text-white/25">|</span><span id="prof-email" class="truncate">E-posta doğrulanıyor</span>
                         </div>
                         <div class="flex items-center gap-2 mt-1 flex-wrap">
-                            <span id="prof-rank-name" class="bg-gradient-to-r from-yellow-400 to-amber-500 text-black px-2 py-0.5 rounded font-io text-xs shadow">Lv.1 Tohum</span>
-                            <span id="prof-rank-icon" class="bg-black/50 w-7 h-7 flex items-center justify-center rounded-lg text-yellow-300 font-black border border-yellow-500/40"><i class="fa-solid fa-seedling"></i></span>
+                            <span id="prof-rank-name" class="bg-gradient-to-r from-yellow-400 to-amber-500 text-black px-1 py-0.5 rounded font-io text-xs shadow flex items-center gap-1"><canvas id="prof-rank-canvas" width="42" height="42" aria-label="Mevcut rank"></canvas><span id="prof-rank-level">LV.1</span></span>
+                            <span id="prof-rank-icon" class="bg-black/50 w-9 h-9 flex items-center justify-center rounded-lg text-yellow-300 font-black border border-yellow-500/40"><canvas id="prof-rank-mini" width="42" height="42" aria-label="Rank rozeti"></canvas></span>
                             <span id="prof-gold-badge" class="bg-black/50 px-2 py-1 rounded-lg text-[10px] text-[#FFDF73] font-black border border-yellow-500/40"><i class="fa-solid fa-coins text-[#F7C02D]"></i> --</span>
                         </div>
-                        <div id="prof-next-rank" class="text-[10px] font-black text-[#9FE870] mt-1">➡️ 🪨 Taş: 350 XP kaldı</div>
+                        <div id="prof-next-rank" class="text-[10px] font-black text-[#9FE870] mt-1 flex items-center gap-1"><span>SONRAKİ</span><canvas id="prof-next-rank-canvas" width="34" height="34" aria-label="Sonraki rank"></canvas><span id="prof-next-rank-xp">350 XP kaldı</span></div>
                     </div>
                 </div>
 
@@ -2151,6 +2151,47 @@
             return `<i class="fa-solid ${icons[Math.max(0, Math.min(icons.length - 1, rankId))] || 'fa-star'}"></i>`;
         }
 
+        function drawProfileRankBadge(canvas, rankId) {
+            if (!canvas) return;
+            const palettes = [
+                ['#6dbf3c','#1a4a08','#d4ffaa'], ['#aab0b8','#282e34','#eef4f8'], ['#c87840','#3a1800','#ffe4b8'],
+                ['#6898c8','#102030','#c8e8ff'], ['#2890ff','#040e60','#b0d8ff'], ['#28e060','#043818','#98ffcc'],
+                ['#ff5010','#6a0000','#ffbf98'], ['#00e0f8','#002838','#80f8ff'], ['#c040f8','#180030','#e4a0ff'],
+                ['#3848d8','#020418','#a8b0ff'], ['#ffc800','#602800','#fff098'], ['#ff80d8','#280018','#ffecf8']
+            ];
+            const [outer, inner, shine] = palettes[Math.max(0, Math.min(11, rankId | 0))];
+            const context = canvas.getContext('2d');
+            const size = Math.min(canvas.width, canvas.height);
+            const center = size / 2;
+            const radius = size * .39;
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.save();
+            context.translate(center, center);
+            context.shadowColor = outer;
+            context.shadowBlur = size * .18;
+            context.fillStyle = outer;
+            context.strokeStyle = shine;
+            context.lineWidth = Math.max(2, size * .06);
+            context.beginPath();
+            for (let index = 0; index < 12; index++) {
+                const angle = -Math.PI / 2 + index * Math.PI / 6;
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+            }
+            context.closePath(); context.fill(); context.stroke();
+            context.shadowBlur = 0;
+            context.fillStyle = inner;
+            context.beginPath(); context.arc(0, 0, radius * .72, 0, Math.PI * 2); context.fill();
+            context.strokeStyle = `${shine}aa`; context.lineWidth = Math.max(1, size * .035);
+            context.beginPath(); context.arc(0, 0, radius * .58, 0, Math.PI * 2); context.stroke();
+            context.fillStyle = shine;
+            context.font = `900 ${Math.max(10, size * .28)}px Arial`;
+            context.textAlign = 'center'; context.textBaseline = 'middle';
+            context.fillText(String((rankId | 0) + 1), 0, 1);
+            context.restore();
+        }
+
         async function updateProfileModalData() {
             if (_authToken) {
                 try {
@@ -2191,9 +2232,11 @@
             document.getElementById('prof-username').textContent = u.username;
             document.getElementById('prof-user-id').textContent = `ID: ${u.id ?? '--'}`;
             document.getElementById('prof-email').textContent = u.email || 'E-posta kayıtlı değil';
-            document.getElementById('prof-rank-name').textContent = `Lv.${rankId + 1} ${currentRankName}`;
-            document.getElementById('prof-rank-icon').innerHTML = getRankIconHtml(rankId);
-            document.getElementById('prof-next-rank').textContent = rankId >= RANKS.length - 1 ? '➡️ ✨ Maksimum rütbe' : `➡️ ${RANK_ICONS[Math.min(rankId + 1, RANK_ICONS.length - 1)] || '🌱'} ${nextRankName}: ${neededToNext.toLocaleString()} XP kaldı`;
+            document.getElementById('prof-rank-level').textContent = `LV.${rankId + 1}`;
+            drawProfileRankBadge(document.getElementById('prof-rank-canvas'), rankId);
+            drawProfileRankBadge(document.getElementById('prof-rank-mini'), rankId);
+            drawProfileRankBadge(document.getElementById('prof-next-rank-canvas'), Math.min(rankId + 1, RANKS.length - 1));
+            document.getElementById('prof-next-rank-xp').textContent = rankId >= RANKS.length - 1 ? 'MAKSİMUM RANK' : `${neededToNext.toLocaleString()} XP kaldı`;
             
             if (rankId >= RANKS.length - 1) {
                 document.getElementById('prof-xp-text').textContent = `${totalXp.toLocaleString()} XP (MAKSİMUM SEVİYE)`;
