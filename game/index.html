@@ -492,9 +492,17 @@
         .item-card:hover { transform: translateY(-3px); background-color: #4A2B14; }
         .item-card.equipped { border-color: #79D138; background-color: #2D401F; box-shadow: 0 0 12px rgba(121,209,56,0.4); }
         .item-card.rarity-common { border-color: #7A5333; }
+        .item-card.rarity-uncommon { border-color: #61C58A; }
         .item-card.rarity-rare { border-color: #3E8EDE; }
         .item-card.rarity-epic { border-color: #9D4EDD; }
         .item-card.rarity-legendary { border-color: #F7C02D; }
+        .rarity-badge { position:absolute; top:4px; right:4px; z-index:2; padding:2px 5px; border:1px solid currentColor; border-radius:999px; font:900 8px/1 Arial,sans-serif; letter-spacing:.35px; text-transform:uppercase; background:rgba(16,8,3,.86); text-shadow:0 1px 2px rgba(0,0,0,.8); pointer-events:none; }
+        .rarity-badge.rarity-common { color:#d6a875; }
+        .rarity-badge.rarity-uncommon { color:#7ce0a7; }
+        .rarity-badge.rarity-rare { color:#71c7ff; }
+        .rarity-badge.rarity-epic { color:#db91ff; }
+        .rarity-badge.rarity-legendary { color:#ffe27a; }
+        .rarity-name { font:900 8px/1 Arial,sans-serif; letter-spacing:.8px; text-transform:uppercase; }
 
         /* Scrollbar */
         ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -1419,20 +1427,20 @@
         const REAL_SKINS = [
             { id: 'wolf',        name: 'Kurt',            img: 'players/wolf.png',        rarity: 'common', free: true,  cost: 0 },
             { id: 'default',     name: 'Savaşçı (Temel)', img: 'players/default.png',     rarity: 'common', free: true,  cost: 0 },
-            { id: 'fox',         name: 'Alev Tilkisi',    img: 'players/fox.png',         rarity: 'rare',   free: false, cost: 300 },
+            { id: 'fox',         name: 'Alev Tilkisi',    img: 'players/fox.png',         rarity: 'uncommon', free: false, cost: 300 },
             { id: 'dragon',      name: 'Ejder Savaşçı',   img: 'players/dragon.png',      rarity: 'legendary', free: false, cost: 1200 },
             { id: 'ninja',       name: 'Gölge Ninja',     img: 'players/ninja.png',       rarity: 'epic',   free: false, cost: 800 },
             { id: 'skull',       name: 'Kafatası Avcısı', img: 'players/skull.png',       rarity: 'epic',   free: false, cost: 900 },
             { id: 'polarbear',   name: 'Kutup Ayısı',     img: 'players/polarbear.png',   rarity: 'rare',   free: false, cost: 450 },
             { id: 'lion',        name: 'Orman Aslanı',    img: 'players/lion.png',        rarity: 'epic',   free: false, cost: 850 },
-            { id: 'croc',        name: 'Timsah Zırhlı',   img: 'players/croc.png',        rarity: 'rare',   free: false, cost: 400 },
-            { id: 'frog',        name: 'Kral Kurbağa',    img: 'players/frog.png',        rarity: 'rare',   free: false, cost: 350 },
+            { id: 'croc',        name: 'Timsah Zırhlı',   img: 'players/croc.png',        rarity: 'uncommon', free: false, cost: 400 },
+            { id: 'frog',        name: 'Kral Kurbağa',    img: 'players/frog.png',        rarity: 'uncommon', free: false, cost: 350 },
             { id: 'phoenix',     name: 'Anka Kuşu',       img: 'players/phoenix.png',     rarity: 'legendary', free: false, cost: 1500 },
             { id: 'robot',       name: 'Sibernetik Robot',img: 'players/robot.png',       rarity: 'epic',   free: false, cost: 1000 },
             { id: 'panda',       name: 'Usta Panda',      img: 'players/panda.png',       rarity: 'rare',   free: false, cost: 500 },
             { id: 'shark',       name: 'Okyanus Köpekbalığı', img: 'players/shark.png',   rarity: 'epic',   free: false, cost: 950 },
-            { id: 'rabbit',      name: 'Fırtına Tavşan',  img: 'players/rabbit.png',      rarity: 'rare',   free: false, cost: 400 },
-            { id: 'penguin',     name: 'Buz Pengueni',    img: 'players/penguin.png',     rarity: 'common', free: false, cost: 200 },
+            { id: 'rabbit',      name: 'Fırtına Tavşan',  img: 'players/rabbit.png',      rarity: 'uncommon', free: false, cost: 400 },
+            { id: 'penguin',     name: 'Buz Pengueni',    img: 'players/penguin.png',     rarity: 'uncommon', free: false, cost: 200 },
             { id: 'octopus',     name: 'Derin Ahtapot',   img: 'players/octopus.png',     rarity: 'epic',   free: false, cost: 900 },
             { id: 'yeti',        name: 'Karlı Dağ Yetisi',img: 'players/yeti.png',        rarity: 'epic',   free: false, cost: 850 },
             { id: 'kiz_ates',    name: 'Ateş Büyücüsü',   img: 'players/kiz_ates.png',    rarity: 'legendary', free: false, cost: 1400 },
@@ -1486,7 +1494,7 @@
         // Kılıç Görünümleri (weapons/sword-tier-*.png)
         const REAL_SWORDS = [
             { id: 'ki_tier_0', name: 'Temel Kılıç',       img: 'weapons/sword-tier-0.png', tier: 0, cost: 0,    free: true,  rarity: 'common' },
-            { id: 'ki_tier_1', name: 'Demir Kılıç',       img: 'weapons/sword-tier-1.png', tier: 1, cost: 200,  free: false, rarity: 'common' },
+            { id: 'ki_tier_1', name: 'Demir Kılıç',       img: 'weapons/sword-tier-1.png', tier: 1, cost: 200,  free: false, rarity: 'uncommon' },
             { id: 'ki_tier_2', name: 'Gümüş Kılıç',       img: 'weapons/sword-tier-2.png', tier: 2, cost: 450,  free: false, rarity: 'rare' },
             { id: 'ki_tier_3', name: 'Altın Kılıç',       img: 'weapons/sword-tier-3.png', tier: 3, cost: 750,  free: false, rarity: 'rare' },
             { id: 'ki_tier_4', name: 'Obsidyen Kılıç',    img: 'weapons/sword-tier-4.png', tier: 4, cost: 1100, free: false, rarity: 'epic' },
@@ -1497,7 +1505,7 @@
         // Balta Görünümleri (weapons/axe-tier-*.png)
         const REAL_AXES = [
             { id: 'ba_tier_0', name: 'Temel Balta',       img: 'weapons/axe-tier-0.png', tier: 0, cost: 0,    free: true,  rarity: 'common' },
-            { id: 'ba_tier_1', name: 'Demir Balta',       img: 'weapons/axe-tier-1.png', tier: 1, cost: 200,  free: false, rarity: 'common' },
+            { id: 'ba_tier_1', name: 'Demir Balta',       img: 'weapons/axe-tier-1.png', tier: 1, cost: 200,  free: false, rarity: 'uncommon' },
             { id: 'ba_tier_2', name: 'Gümüş Balta',       img: 'weapons/axe-tier-2.png', tier: 2, cost: 450,  free: false, rarity: 'rare' },
             { id: 'ba_tier_3', name: 'Altın Balta',       img: 'weapons/axe-tier-3.png', tier: 3, cost: 750,  free: false, rarity: 'rare' },
             { id: 'ba_tier_4', name: 'Obsidyen Balta',    img: 'weapons/axe-tier-4.png', tier: 4, cost: 1100, free: false, rarity: 'epic' },
@@ -1530,6 +1538,27 @@
             kiliclar: REAL_SWORDS,
             baltalar: REAL_AXES
         };
+
+        const RARITY_META = Object.freeze({
+            common: { label: 'COMMON', border: '#9b6b43', glow: 'rgba(155,107,67,.28)' },
+            uncommon: { label: 'UNCOMMON', border: '#61c58a', glow: 'rgba(97,197,138,.34)' },
+            rare: { label: 'RARE', border: '#4ea8e8', glow: 'rgba(78,168,232,.42)' },
+            epic: { label: 'EPIC', border: '#b15bea', glow: 'rgba(177,91,234,.5)' },
+            legendary: { label: 'LEGENDARY', border: '#f7c02d', glow: 'rgba(247,192,45,.58)' }
+        });
+
+        function decorateRarityCard(card, item) {
+            const rarity = RARITY_META[item?.rarity] ? item.rarity : 'common';
+            const meta = RARITY_META[rarity];
+            card.classList.add('item-card', `rarity-${rarity}`);
+            card.style.borderColor = meta.border;
+            card.style.boxShadow = `0 0 10px ${meta.glow}`;
+            const badge = document.createElement('span');
+            badge.className = `rarity-badge rarity-${rarity}`;
+            badge.textContent = meta.label;
+            badge.title = `${meta.label} rarity`;
+            card.appendChild(badge);
+        }
 
         const RANKS = ['Tohum', 'Taş', 'Köylü', 'Acemi', 'Savaşçı', 'Muhafız', 'Ateş Efendisi', 'Kristal', 'Fırtına', 'Gece Hanı', 'Efsane', 'Tanrısal'];
         const RANK_ICONS = ['🌱', '🪨', '🪵', '🏹', '⚔️', '🛡️', '🔥', '💎', '🌪️', '🌙', '👑', '✨'];
@@ -2237,6 +2266,7 @@
                     isSelected ? 'bg-[#502e12] border-[#fce072]' :
                     'bg-[#3b200e] border-[#281204]'
                 }`;
+                decorateRarityCard(card, item);
                 card.onclick = () => selectCosmeticPreviewItem(item, _cosmeticTab);
 
                 const imgWrap = document.createElement('div');
@@ -2636,6 +2666,7 @@
                     isSelected ? 'bg-[#502e12] border-[#fce072]' :
                     owned ? 'bg-[#3b200e] border-[#281204]' : 'bg-[#2f180a] border-[#201006]'
                 }`;
+                decorateRarityCard(card, item);
                 card.onclick = () => selectShopPreviewItem(item, _shopTab);
 
                 const imgWrap = document.createElement('div');
