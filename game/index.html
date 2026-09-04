@@ -2440,6 +2440,7 @@
             overlay.style.position = 'fixed';
             overlay.style.inset = '0';
             overlay.style.background = 'rgba(8, 7, 10, 0.82)';
+            overlay.style.zIndex = '100000';
                         overlay.style.display = 'flex';
                         overlay.style.alignItems = 'center';
                         overlay.style.justifyContent = 'center';
@@ -2524,12 +2525,12 @@
                 const canvas = candidatesEl.querySelector(`[data-candidate-index="${index}"]`);
                 if (canvas) drawGeneratedSkin(canvas.getContext('2d'), 21, 21, item.id, _animFrame, .26);
             });
-            const rewardIndex = Math.max(0, candidates.findIndex(item => item.id === reward.id));
             const reelItems = [...Array.from({ length: 4 }, () => candidates).flat(), reward];
             reelTrack.innerHTML = '';
             reelItems.forEach((item, index) => {
                 const card = document.createElement('div');
-                card.style.cssText = 'flex:0 0 84px;height:92px;border:2px solid rgba(255,220,140,.42);border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(0,0,0,.34));display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;';
+                card.className = 'chest-slot-card';
+                card.style.borderColor = rarityStyle.color;
                 card.style.transform = `rotateY(${(index % 3 - 1) * 4}deg) scale(${index % 5 === 0 ? 1.04 : 1})`;
                 if (item.generated) {
                     const canvas = document.createElement('canvas'); canvas.width = 72; canvas.height = 72; drawGeneratedSkin(canvas.getContext('2d'), 36, 36, item.id, _animFrame, .52); card.appendChild(canvas);
@@ -2566,10 +2567,15 @@
             reelTrack.style.transition = 'none';
             reelTrack.style.transform = 'translateX(0)';
             void reelTrack.offsetWidth;
-            const targetIndex = candidates.length * 4 + rewardIndex;
-            const reelOffset = targetIndex * 92;
             reelTrack.style.transition = 'transform 4.2s cubic-bezier(0.08,0.82,0.16,1)';
-            requestAnimationFrame(() => { reelTrack.style.transform = `translateX(-${reelOffset}px)`; });
+            requestAnimationFrame(() => {
+                const targetCard = reelTrack.lastElementChild;
+                const frame = reelTrack.parentElement;
+                if (!targetCard || !frame) return;
+                const targetCenter = targetCard.offsetLeft + targetCard.offsetWidth / 2;
+                const reelOffset = Math.max(0, targetCenter - frame.clientWidth / 2);
+                reelTrack.style.transform = `translateX(-${reelOffset}px)`;
+            });
             let candidateIndex = 0;
             const candidateTimer = setInterval(() => {
                 const candidateImages = candidatesEl.querySelectorAll('[data-candidate-index]');
