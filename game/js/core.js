@@ -322,6 +322,40 @@ var _pvpPredictTime     = new Map();
 var _eLidCounter        = 0;
 var _buildDmgTimer      = 0;
 var _userZoomMultiplier = 1.0;
+var _attackPending      = false;
+var _attackQueued       = false;
+
+// Clean, authentic .io-style weapon swing slash curve (kavis cizgisi - zero jitter, monotonic sweep)
+function _drawWeaponSlashArc(context, prog, weaponType) {
+  if (!prog || prog <= 0.04 || prog >= 0.90) return;
+  const alpha = Math.sin(prog * Math.PI) * 0.55;
+  if (alpha <= 0.01) return;
+  context.save();
+  const isSword = weaponType === 2;
+  const radius = isSword ? 94 : 80;
+  // Monotonic forward sweep with swing progression — perfectly stable, zero backward vibration
+  const sweep = prog * (isSword ? 1.45 : 1.25);
+  const startAng = -0.42 + sweep * 0.28;
+  const endAng = -0.42 + sweep;
+  
+  // Outer blade slash sweep (clean, crisp, semi-transparent white/silver, NO blue lines)
+  context.lineCap = 'round';
+  context.lineWidth = isSword ? 3.5 : 4.5;
+  context.strokeStyle = isSword ? `rgba(245, 248, 255, ${alpha})` : `rgba(255, 248, 215, ${alpha * 0.92})`;
+  context.beginPath();
+  context.arc(8, 0, radius, startAng, endAng);
+  context.stroke();
+
+  // Subtle softer inner glow/trail
+  if (_qualityLevel >= 1) {
+    context.lineWidth = isSword ? 6.5 : 8;
+    context.strokeStyle = isSword ? `rgba(255, 255, 255, ${alpha * 0.22})` : `rgba(255, 235, 180, ${alpha * 0.2})`;
+    context.beginPath();
+    context.arc(8, 0, radius - 2, startAng + 0.06, endAng);
+    context.stroke();
+  }
+  context.restore();
+}
 
 // ── SPATIAL PARTITIONING (GRID SYSTEM) ─────────────────────────────────────
 // PERF: Divides map into 250x250 cells to reduce CPU/GPU load by only processing visible objects
@@ -3836,7 +3870,7 @@ const UPGRADE_SCORE = [400, 1000, 2500, 6000, 15000]; // puan maliyeti (her tier
 const TIER_HP_MULS  = [1.0, 1.6, 2.5, 4.0, 6.5, 10.0];
 const TIER_DMG_MULS = [1.0, 1.5, 2.2, 3.5, 5.0, 8.0];
 const BTYPE_NAMES   = {3:'Kazık',4:'Değirmen',5:'Hız Pedi',6:'Tuzak',7:'Taret',8:'Duvar',9:'Kale',10:'Kamp Ateşi'};
-const BTYPE_BASE_HP = {3:250,4:180,5:100,6:850,7:350,8:500,9:750,10:400};
+const BTYPE_BASE_HP = {3:250,4:180,5:100,6:220,7:350,8:500,9:750,10:400};
 
 function _getTier(b) { return Math.min(5, Math.max(0, b.tier || 0)); }
 
@@ -4169,7 +4203,9 @@ function setupJoy(zoneId, stickId, isMove) {
       player.vy = _joystickMoveY;
     } else {
       player.angle = ang;
-      player.isAttacking = dist > 8;
+      const doAtk = dist > 8;
+      _attackPending = doAtk;
+      if (doAtk) _attackQueued = true;
     }
   }
 
@@ -4202,8 +4238,8 @@ function setupJoy(zoneId, stickId, isMove) {
       if (doFruitUse) {
         eatApple();
       }
-      if (player.weapon >= 3 && player.isAttacking) tryPlaceBuilding();
-      player.isAttacking = false;
+      if (player.weapon >= 3 && _attackPending) tryPlaceBuilding();
+      _attackPending = false;
     }
   };
   zone.addEventListener('pointerup', end);
@@ -4955,14 +4991,21 @@ function checkHits() {
       if (b.lastHitSwingId === _swingId) continue;
       if (b.ownerClanId && player.clanId && b.ownerClanId === player.clanId) continue;
 
+      const isTrappedInThis = Boolean(_trapCaughtBy && (b._netId === _trapCaughtBy || b.id === _trapCaughtBy || b._bLid === _trapCaughtBy));
       const _bdx = b.x - player.x, _bdy = b.y - player.y;
+      const _bDist2 = _bdx * _bdx + _bdy * _bdy;
       const bRad = {3:34,4:44,5:22,6:45,7:32,8:20,9:52}[b.type] || 36;
       const _bMaxDist = player.radius * 0.5 + hitRange + bRad;
-      if (Math.abs(_bdx) > _bMaxDist || Math.abs(_bdy) > _bMaxDist) continue;
-      if (_bdx * _bdx + _bdy * _bdy > _bMaxDist * _bMaxDist) continue;
-      let diff = Math.abs(Math.atan2(_bdy, _bdx) - player.angle);
-      if (diff > Math.PI) diff = 2 * Math.PI - diff;
-      if (diff > spread) continue;
+      if (!isTrappedInThis) {
+        if (Math.abs(_bdx) > _bMaxDist || Math.abs(_bdy) > _bMaxDist) continue;
+        if (_bDist2 > _bMaxDist * _bMaxDist) continue;
+        const isDirectTouch = _bDist2 <= (bRad + player.radius) * (bRad + player.radius);
+        if (!isDirectTouch) {
+          let diff = Math.abs(Math.atan2(_bdy, _bdx) - player.angle);
+          if (diff > Math.PI) diff = 2 * Math.PI - diff;
+          if (diff > spread) continue;
+        }
+      }
 
       // HIT confirmed — deal weapon damage to building
       b.lastHitSwingId = _swingId;
@@ -9739,6 +9782,12 @@ function drawPlayer() {
     }
   }
 
+  // Draw clean .io-style weapon swing arc (kavis cizgisi)
+  if (player.isAttacking && player.weapon < 3 && player.attackTimer > 0) {
+    const _swProg = player.attackTimer / (player.attackDuration || (player.weapon === 2 ? 14 : 18));
+    _drawWeaponSlashArc(ctx, _swProg, player.weapon);
+  }
+
   ctx.rotate(swingAngle);
 
   // Draw weapon — skin veya tier bazlı görünüm
@@ -9919,15 +9968,16 @@ function _interpOtherPlayers() {
   const renderTime = wallNow - 65; // 65ms render delay buffer
 
   _otherPlayers.forEach((p) => {
-    // If trapped by a trap building, lock to trap center
+    // If trapped by a trap building, keep at trapped contact position (can be pushed by players!)
     if (p._trappedBy) {
       const _trb = _buildingsMap.get(p._trappedBy) || buildings.find(b => (b._netId === p._trappedBy || b.id === p._trappedBy || b._bLid === p._trappedBy));
       if (_trb && _trb.hp > 0) {
-        p.x = _trb.x;
-        p.y = _trb.y;
+        const destX = Number.isFinite(p._trappedX) ? p._trappedX : _trb.x;
+        const destY = Number.isFinite(p._trappedY) ? p._trappedY : _trb.y;
+        p.x += (destX - p.x) * Math.min(1, dt * 25);
+        p.y += (destY - p.y) * Math.min(1, dt * 25);
         p.vx = 0;
         p.vy = 0;
-        return;
       } else {
         p._trappedBy = null;
         p._trappedX = undefined;
@@ -9968,14 +10018,15 @@ function _interpOtherPlayers() {
             p.x = targetX;
             p.y = targetY;
           } else {
-            const converge = 1 - Math.exp(-28 * dt);
+            // Direct smooth convergence onto interpolated trajectory
+            const converge = 1 - Math.exp(-38 * dt);
             p.x += (targetX - p.x) * converge;
             p.y += (targetY - p.y) * converge;
           }
           let angDiff = targetAngle - (p.angle || 0);
           while (angDiff > Math.PI) angDiff -= Math.PI * 2;
           while (angDiff < -Math.PI) angDiff += Math.PI * 2;
-          p.angle = (p.angle || 0) + angDiff * (1 - Math.exp(-28 * dt));
+          p.angle = (p.angle || 0) + angDiff * (1 - Math.exp(-32 * dt));
 
           interpolated = true;
           break;
@@ -9984,22 +10035,19 @@ function _interpOtherPlayers() {
     }
 
     if (!interpolated) {
-      // If render time is newer than latest snapshot, smoothly extrapolate with velocity
+      // Smooth extrapolation using actual packet velocity without wild multiplier
       const targetX = p._targetX !== undefined ? p._targetX : (p._sx !== undefined ? p._sx : p.x);
       const targetY = p._targetY !== undefined ? p._targetY : (p._sy !== undefined ? p._sy : p.y);
-      const vx = p.vx || 0;
-      const vy = p.vy || 0;
-
       const timeSincePacket = Math.min((wallNow - (p._lastPacketTime || wallNow)) / 1000, 0.08);
-      const extX = targetX + vx * (timeSincePacket * 15);
-      const extY = targetY + vy * (timeSincePacket * 15);
+      const extX = targetX + (p.vx || 0) * (timeSincePacket * 2.5);
+      const extY = targetY + (p.vy || 0) * (timeSincePacket * 2.5);
 
       const distSq = (extX - p.x) * (extX - p.x) + (extY - p.y) * (extY - p.y);
       if (distSq > 350 * 350) {
         p.x = extX;
         p.y = extY;
       } else {
-        const convergeRate = 1 - Math.exp(-24 * dt);
+        const convergeRate = 1 - Math.exp(-28 * dt);
         p.x += (extX - p.x) * convergeRate;
         p.y += (extY - p.y) * convergeRate;
       }
@@ -10008,13 +10056,13 @@ function _interpOtherPlayers() {
       let da = targetAng - (p.angle || 0);
       while (da > Math.PI) da -= Math.PI * 2;
       while (da < -Math.PI) da += Math.PI * 2;
-      p.angle = (p.angle || 0) + da * (1 - Math.exp(-24 * dt));
+      p.angle = (p.angle || 0) + da * (1 - Math.exp(-28 * dt));
     }
 
     // 60 FPS local attackTimer advancement for smooth weapon & arm swing animation
     if (p.isAttacking) {
       const dur = p.attackDuration || (p.weapon === 2 ? 14 : 18);
-      p.attackTimer = (p.attackTimer || 0) + 1;
+      p.attackTimer = (p.attackTimer || 0) + _dt;
       if (p.attackTimer >= dur) {
         p.isAttacking = false;
         p.attackTimer = 0;
@@ -10477,25 +10525,43 @@ function update(timestamp = 0) {
   const _momFric = _fricFrame;
   player.momX *= _momFric; player.momY *= _momFric;
 
-  // ---- Saldırı döngüsü (PC & Mobil Eşitlendi - _dt ile FPS bağımsız) ----
-  const attackingNow = player.isAttacking;
-  if (attackingNow) {
-    const _prevT = player.attackTimer;
-    player.attackTimer += _dt * (1 / (player.atkSpdBonus || 1));
-    if (player.attackTimer > player.attackDuration) {
-      player.attackTimer = 1; // yeni swing döngüsü hemen başlar
-      _swingId++;             // yeni swing ID → hedefler tekrar vurulabilir
-    }
+  // ---- Saldırı döngüsü (Moomoo.io tarzı: anında vuruş + akıcı ileri-geri zincirleme döngüsü) ----
+  if (!player.isAttacking && (_attackPending || _attackQueued)) {
+    player.isAttacking = true;
+    player.attackTimer = 1;
+    _attackQueued = false;
+    _swingId++;
     if (player.weapon < 3) {
-      checkHits();
-      _checkPvpHits(); // lag compensation: immediate PvP hit prediction (zero RTT)
-      if (_prevT === 0 || player.attackTimer < _prevT) _mpSwing(); // sunucuya swing bildirimi
+      checkHits();     // Tıklama anında gecikmesiz vuruş kaydı
+      _checkPvpHits(); // Anında yerel PvP tahmin vuruşu
+      _mpSwing();      // Sunucuya anında swing bildirimi
+    }
+  }
+  if (player.isAttacking) {
+    const dur = player.attackDuration || (player.weapon === 2 ? 14 : 18);
+    player.attackTimer += _dt * (1 / (player.atkSpdBonus || 1));
+
+    // Full swing cycle completes when attackTimer reaches duration (swung out and returned to hand)
+    if (player.attackTimer >= dur) {
+      if (_attackPending || _attackQueued) {
+        // Kesintisiz şekilde bir sonraki savurmaya bağlanır (üst üste tıklama veya basılı tutma)
+        player.attackTimer = 1;
+        _attackQueued = false;
+        _swingId++;
+        if (player.weapon < 3) {
+          checkHits();     // Zincirleme savurmada anında vuruş
+          _checkPvpHits();
+          _mpSwing();
+        }
+      } else {
+        player.isAttacking = false;
+        player.attackTimer = 0;
+      }
     }
   } else {
-    if (player.attackTimer > 0) _swingId++; // swing bitti → ID'yi ilerlet
     player.attackTimer = 0;
   }
-  _wasAttacking = attackingNow;
+  _wasAttacking = player.isAttacking;
 
   // Buildings
   for (let i = buildings.length - 1; i >= 0; i--) {
@@ -11261,12 +11327,14 @@ function update(timestamp = 0) {
       if (isOwn) continue;
       if (b.ownerClanId && player.clanId && b.ownerClanId === player.clanId) continue;
       const tdx = player.x - b.x, tdy = player.y - b.y;
-      const trapTriggerR = (b.radius || 52) + player.radius * 0.75;
+      const trapTriggerR = 28; // Moomoo.io style: player must actually step inside the trap
       if (tdx * tdx + tdy * tdy <= trapTriggerR * trapTriggerR) {
         const trapId = b._netId || b.id || b._bLid;
         if (_connected && _socket && b._netId && (_trapPendingId !== trapId || Date.now() >= _trapPendingUntil)) {
           _trapPendingId = trapId;
           _trapPendingUntil = Date.now() + 1200;
+          _trapCaughtX = player.x;
+          _trapCaughtY = player.y;
           _socket.emit('trap_touch', { victimId: _mySocketId, buildingId: b._netId });
         }
         break;
@@ -11282,7 +11350,7 @@ function update(timestamp = 0) {
       _clearTrapLock();
       playSound(320, 0.12, 'sine', 0.22);
     } else {
-      if (_trapCaughtX !== undefined) { player.x = _trapCaughtX; player.y = _trapCaughtY; }
+      if (Number.isFinite(_trapCaughtX)) { player.x = _trapCaughtX; player.y = _trapCaughtY; }
       player.vx = 0; player.vy = 0;
       player.momX = 0; player.momY = 0;
       speedMult = 0;
@@ -11325,8 +11393,7 @@ function update(timestamp = 0) {
   for (let _bi = 0, _bLen = buildings.length; _bi < _bLen; _bi++) {
     const b = buildings[_bi];
     if (_BLD_RADII[b.type] === undefined || b.hp <= 0) continue;
-    if (b.type === 5) continue;
-    if (b.type === 6 && (b._ownerId === _mySocketId || (!b._ownerId && !b._remote))) continue;
+    if (b.type === 5 || b.type === 6) continue; // Boost pads & bear traps have no solid pushout collision
     if (Math.abs(b.x - player.x) > _P_COL_R || Math.abs(b.y - player.y) > _P_COL_R) continue;
     if (_trapCaughtBy && (b._netId === _trapCaughtBy || b.id === _trapCaughtBy)) continue;
     if (_solidCount >= _SOLID_POOL.length) break;
@@ -11907,7 +11974,7 @@ function update(timestamp = 0) {
     if (swingPeak > 0.55 && Math.random() < 0.4) {
       const tipX = Math.cos(player.angle) * (hitRange * 0.75 + player.radius * 0.3);
       const tipY = Math.sin(player.angle) * (hitRange * 0.75 + player.radius * 0.3);
-      const sparkCol = player.weapon === 2 ? '#aaddff' : '#ffe066';
+      const sparkCol = player.weapon === 2 ? '#ffffff' : '#ffe066';
       _spawnParticle(player.x+tipX+(Math.random()-0.5)*14, player.y+tipY+(Math.random()-0.5)*14, (Math.random()-0.5)*5, (Math.random()-0.5)*5-2, 2+Math.random()*2, 8+Math.random()*6, sparkCol);
     }
   }
@@ -12345,7 +12412,8 @@ function _handleBuildInteraction(e) {
   _tryInitAudio();
   if (player.weapon === 10) { fireBowArrow(); return; }
   hideBuildUpgradePanel();
-  player.isAttacking = true;
+  _attackPending = true;
+  _attackQueued = true;
 }
 
 canvas.addEventListener('pointerdown', e => {
@@ -12360,10 +12428,11 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('touchstart', _tryInitAudio, { once: true });
 canvas.addEventListener('mouseup', e => {
   if (e.button === 0) {
-    if (player.weapon >= 3 && player.isAttacking) tryPlaceBuilding();
-    player.isAttacking = false;
+    if (player.weapon >= 3) tryPlaceBuilding();
+    _attackPending = false;
   }
 });
+window.addEventListener('blur', () => { _attackPending = false; _attackQueued = false; });
 
 // ============================================================
 // MULTIPLAYER — WebSocket / Socket.io
@@ -12606,9 +12675,21 @@ function initMultiplayer() {
         if (s.hp   !== undefined) existing.hp          = s.hp;
         if (s.mhp  !== undefined) existing.maxHp       = s.mhp;
         if (s.w    !== undefined) existing.weapon      = s.w;
-        if (s.atk  !== undefined) existing.isAttacking = s.atk;
-        if (s.atp  !== undefined) existing.attackTimer = s.atp;
-        if (s.atd  !== undefined) existing.attackDuration = s.atd;
+        // Remote player attack animation sync: never abort active local swing animation
+        if (s.atk) {
+          if (!existing.isAttacking || existing.attackTimer === 0) {
+            existing.isAttacking = true;
+            existing.attackTimer = 1;
+            existing.attackDuration = s.atd || (existing.weapon === 2 ? 14 : 18);
+          }
+        } else {
+          // If remote player is not currently in an active swing cycle, sync idle state
+          if (!existing.isAttacking || existing.attackTimer === 0) {
+            existing.isAttacking = false;
+            existing.attackTimer = 0;
+          }
+        }
+        if (s.atd  !== undefined && (!existing.isAttacking || existing.attackTimer === 0)) existing.attackDuration = s.atd;
         if (s.k    !== undefined) existing.kills       = s.k;
         if (s.xp   !== undefined) existing.xp          = s.xp;
         if (s.sk) existing.skin = s.sk;
@@ -12624,6 +12705,8 @@ function initMultiplayer() {
         if (s.clanTag !== undefined) existing.clanTag    = s.clanTag;
         if (s.acc  !== undefined) existing.acc         = s.acc;
         if (s.trappedBy !== undefined) existing._trappedBy = s.trappedBy;
+        if (s.trappedX !== undefined && s.trappedX !== null) existing._trappedX = s.trappedX;
+        if (s.trappedY !== undefined && s.trappedY !== null) existing._trappedY = s.trappedY;
         // Build preview position (null when not in build mode)
         existing.buildX = (typeof s.bx === 'number') ? s.bx : null;
         existing.buildY = (typeof s.by === 'number') ? s.by : null;
@@ -12636,6 +12719,8 @@ function initMultiplayer() {
           rankId: s.rk ?? 0, clanId: s.clanId || '', clanTag: s.clanTag || '',
           acc: s.acc || {},
           _trappedBy: s.trappedBy || null,
+          _trappedX: s.trappedX ?? undefined,
+          _trappedY: s.trappedY ?? undefined,
           buildX: (typeof s.bx === 'number') ? s.bx : null,
           buildY: (typeof s.by === 'number') ? s.by : null,
           _targetX: sx, _targetY: sy, _targetAngle: sa, vx: svx, vy: svy, _lastPacketTime: now,
@@ -13040,13 +13125,17 @@ function initMultiplayer() {
     const sx = Number(s.x);
     const sy = Number(s.y);
     if (!Number.isFinite(sx) || !Number.isFinite(sy)) return;
+    if (_trapCaughtBy) {
+      _trapCaughtX = sx;
+      _trapCaughtY = sy;
+    }
     const dist = Math.hypot(sx - player.x, sy - player.y);
     if (dist > 350) {
       player.x = sx;
       player.y = sy;
       _posErrorX = 0;
       _posErrorY = 0;
-    } else if (dist > 8) {
+    } else if (dist > 4) {
       // Smooth error blending over ~100ms instead of snapping back to 100ms in the past
       _posErrorX = (sx - player.x) * 0.6;
       _posErrorY = (sy - player.y) * 0.6;
@@ -13126,12 +13215,14 @@ function initMultiplayer() {
     const by = b ? b.y : player.y;
     if (victimId && victimId !== _mySocketId) {
       const victim = _otherPlayers.get(victimId);
-      if (victim && b) {
+      if (victim) {
         victim._trappedBy = bNetId;
-        victim._trappedX = b.x;
-        victim._trappedY = b.y;
-        victim.x = b.x;
-        victim.y = b.y;
+        const vX = Number.isFinite(Number(x)) ? Number(x) : victim.x;
+        const vY = Number.isFinite(Number(y)) ? Number(y) : victim.y;
+        victim._trappedX = vX;
+        victim._trappedY = vY;
+        victim.x = vX;
+        victim.y = vY;
         victim.vx = 0;
         victim.vy = 0;
       }
@@ -13179,9 +13270,8 @@ function initMultiplayer() {
   // Trap caught — server froze us in a trap
   _socket.on('trap_caught', ({ buildingId, x, y }) => {
     if (!player || player.dead) return;
-    const b = _buildingsMap.get(buildingId) || buildings.find(x => (x._netId === buildingId || x.id === buildingId));
-    const snapX = b ? b.x : (Number.isFinite(Number(x)) ? Number(x) : player.x);
-    const snapY = b ? b.y : (Number.isFinite(Number(y)) ? Number(y) : player.y);
+    const snapX = Number.isFinite(Number(x)) ? Number(x) : player.x;
+    const snapY = Number.isFinite(Number(y)) ? Number(y) : player.y;
     _trapPendingId = null;
     _trapPendingUntil = 0;
     _trapCaughtBy = buildingId;
@@ -13919,9 +14009,10 @@ function drawOtherPlayers() {
       // ── Weapon + arms — identical style to local player ──────────────────
       {
         let swAng = 0;
+        let prog = 0;
         if (p.isAttacking && p.attackTimer > 0) {
           const dur = p.attackDuration || (p.weapon === 2 ? 14 : 18);
-          const prog = Math.max(0, Math.min(1, p.attackTimer / dur));
+          prog = Math.max(0, Math.min(1, p.attackTimer / dur));
           if (p.weapon >= 3) {
             swAng = Math.sin(prog * Math.PI) * 0.2;
           } else {
@@ -13930,18 +14021,20 @@ function drawOtherPlayers() {
             swAng = Math.sin(remap * Math.PI * 0.5) * (p.weapon === 2 ? (Math.PI / 1.2) : (Math.PI / 1.5));
           }
         }
+        // Draw clean .io-style weapon swing arc (kavis cizgisi - no blue lines)
+        if (p.isAttacking && p.weapon < 3 && p.attackTimer > 0) {
+          _drawWeaponSlashArc(ctx, prog, p.weapon);
+        }
         ctx.save(); ctx.rotate(swAng);
 
         // Weapon (only for axe/sword, not building items)
         if (p.weapon === 1 || p.weapon === 2) {
-          if (p.isAttacking && _qualityLevel >= 2) { ctx.shadowColor = p.weapon === 2 ? '#8ad3ff' : '#ffd86b'; ctx.shadowBlur = 10; }
           const _otherWeaponKind = p.weapon === 1 ? 'axe' : 'sword';
           const _otherWeaponTier = p.weapon === 1 ? (p.axeTier ?? 0) : (p.swordTier ?? 0);
           const _otherWeaponImage = _weaponSprite(_otherWeaponKind, _otherWeaponTier);
           if (_otherWeaponImage) _drawWeaponSprite(ctx, _otherWeaponImage, _otherWeaponKind);
           else if (p.weapon === 1) drawAxeByTier(ctx, _otherWeaponTier, globalTime);
           else drawSwordByTier(ctx, _otherWeaponTier, globalTime);
-          ctx.shadowBlur = 0;
         }
 
         // Arms — same two-ellipse style for ALL weapon modes (weapon + building)

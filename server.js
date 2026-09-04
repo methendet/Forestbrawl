@@ -1794,7 +1794,7 @@ io.on('connection', (socket) => {
       const nearbyB = nearbyBuildings(acceptedX, acceptedY, 90);
       for (let bi = 0; bi < nearbyB.length; bi++) {
         const b = nearbyB[bi];
-        if (b.type === 5) continue; // Boost pad allows walkover
+        if (b.type === 5 || b.type === 6) continue; // Boost pad & bear trap allow smooth walkover
         const bdx = acceptedX - b.x, bdy = acceptedY - b.y;
         const bdist2 = bdx * bdx + bdy * bdy;
         const minBdist = 36 + (b.type === 8 ? 42 : 36);
@@ -1813,8 +1813,8 @@ io.on('connection', (socket) => {
       if (b && (b.hp ?? 100) > 0 && Date.now() < (player.trappedUntil || 0)) {
         data.vx = 0;
         data.vy = 0;
-        data.x = player.trappedX ?? b.x;
-        data.y = player.trappedY ?? b.y;
+        data.x = Number.isFinite(player.trappedX) ? player.trappedX : (Number.isFinite(b.x) ? b.x : acceptedX);
+        data.y = Number.isFinite(player.trappedY) ? player.trappedY : (Number.isFinite(b.y) ? b.y : acceptedY);
         acceptedX = data.x;
         acceptedY = data.y;
       } else {
@@ -1827,24 +1827,34 @@ io.on('connection', (socket) => {
       else if (data[key] !== undefined) player[key] = data[key];
     }
 
-    // Soft player-vs-player pushout without jitter
-    if (!player.trappedBy) {
-      for (const [otherId, other] of players) {
-        if (otherId === socket.id || !other || (other.hp ?? 0) <= 0) continue;
-        const dx = player.x - (Number(other.x) || 0);
-        const dy = player.y - (Number(other.y) || 0);
-        const minDistance = 68;
-        const distanceSquared = dx * dx + dy * dy;
-        if (distanceSquared >= minDistance * minDistance) continue;
-        const distance = Math.sqrt(distanceSquared) || 0.01;
-        const overlap = minDistance - distance;
+    // Soft player-vs-player pushout (Moomoo.io style: moving players, including trap owner, can push trapped victims)
+    for (const [otherId, other] of players) {
+      if (otherId === socket.id || !other || (other.hp ?? 0) <= 0) continue;
+      const dx = player.x - (Number(other.x) || 0);
+      const dy = player.y - (Number(other.y) || 0);
+      const minDistance = 68;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared >= minDistance * minDistance) continue;
+      const distance = Math.sqrt(distanceSquared) || 0.01;
+      const overlap = minDistance - distance;
+
+      if (!player.trappedBy && !other.trappedBy) {
+        // Both free: push each other symmetrically
         player.x += (dx / distance) * overlap * 0.5;
         player.y += (dy / distance) * overlap * 0.5;
-        if (overlap > 18) {
-          needsPosCorrection = true;
-        }
-        break;
+      } else if (!player.trappedBy && other.trappedBy) {
+        // Player is free, other is trapped: player pushes the trapped victim!
+        const pushX = (dx / distance) * overlap * 0.45;
+        const pushY = (dy / distance) * overlap * 0.45;
+        other.x = (Number(other.x) || 0) - pushX;
+        other.y = (Number(other.y) || 0) - pushY;
+        other.trappedX = other.x;
+        other.trappedY = other.y;
       }
+      if (overlap > 18) {
+        needsPosCorrection = true;
+      }
+      break;
     }
     if (incomingSeq !== null) player.stateSeq = incomingSeq;
     player.stateAt = Date.now();
@@ -1863,7 +1873,7 @@ io.on('connection', (socket) => {
     if ((attacker.hp ?? 250) <= 0) attacker.hp = 250;
     const weapon = Number(data.weapon) === 2 ? 2 : 1;
     const now = Date.now();
-    const swingCooldown = weapon === 2 ? 180 : 230;
+    const swingCooldown = weapon === 2 ? 170 : 220;
     if (now - (attacker.lastSwingAt || 0) < swingCooldown) return;
     attacker.lastSwingAt = now;
     const range = weapon === 2 ? 140 : 128;
@@ -2051,18 +2061,20 @@ io.on('connection', (socket) => {
     if (trapOwner && ((trapOwner.clanId && trapOwner.clanId === target.clanId) || (trapOwner.team && target.team && trapOwner.team === target.team))) return;
     const dx = (Number(target.x) || 0) - (Number(building.x) || 0);
     const dy = (Number(target.y) || 0) - (Number(building.y) || 0);
-    const triggerRadius = (Number(building.radius) || 78) + 35;
+    const triggerRadius = 36; // Moomoo.io style: player must step inside the trap
     if (dx * dx + dy * dy > triggerRadius * triggerRadius) return;
+    const freezeX = Number.isFinite(target.x) ? target.x : building.x;
+    const freezeY = Number.isFinite(target.y) ? target.y : building.y;
     target.trappedBy = building.id;
-    target.trappedX = building.x;
-    target.trappedY = building.y;
-    target.x = building.x;
-    target.y = building.y;
+    target.trappedX = freezeX;
+    target.trappedY = freezeY;
+    target.x = freezeX;
+    target.y = freezeY;
     target.trappedUntil = Date.now() + 4000;
     target.vx = 0;
     target.vy = 0;
-    io.to(data.victimId).emit('trap_caught', { buildingId: building.id, x: building.x, y: building.y });
-    io.emit('trap_triggered', { buildingId: building.id, victimId: data.victimId, x: building.x, y: building.y });
+    io.to(data.victimId).emit('trap_caught', { buildingId: building.id, x: freezeX, y: freezeY });
+    io.emit('trap_triggered', { buildingId: building.id, victimId: data.victimId, x: freezeX, y: freezeY });
   });
 
   socket.on('mob_trap_hit', (data = {}) => {
@@ -2271,8 +2283,8 @@ io.on('connection', (socket) => {
     const owner = players.get(socket.id);
     const building = { ...data, ownerId: socket.id, ownerClanId: owner?.clanId || '' };
     if (bType === 6) {
-      building.maxHp = Math.max(1800, Number(data.maxHp) || 0);
-      building.hp = Math.min(building.maxHp, Math.max(building.maxHp * 0.9, Number(data.hp) || 0));
+      building.maxHp = 220;
+      building.hp = Math.min(220, Math.max(1, Number(data.hp) || 220));
     }
     buildings.set(id, building);
     socket.emit('build_ack', { clientId: data.id, serverId: id });
@@ -2294,8 +2306,8 @@ io.on('connection', (socket) => {
       }
       const building = { ...data.building, ownerId: socket.id, ownerClanId: players.get(socket.id)?.clanId || '' };
       if (bType === 6) {
-        building.maxHp = Math.max(1800, Number(data.building?.maxHp) || 0);
-        building.hp = Math.min(building.maxHp, Math.max(building.maxHp * 0.9, Number(data.building?.hp) || 0));
+        building.maxHp = 220;
+        building.hp = Math.min(220, Math.max(1, Number(data.building?.hp) || 220));
       }
       buildings.set(data.id, building);
       relayToOthers(socket, 'build', { id: data.id, building });
@@ -2312,13 +2324,17 @@ io.on('connection', (socket) => {
     io.emit('build_destroy', { id });
     io.emit('trap_freed', { buildingId: id });
     for (const p of players.values()) {
-      if (p.trappedBy === id) p.trappedBy = null;
+      if (p.trappedBy === id) {
+        p.trappedBy = null;
+        p.trappedX = null;
+        p.trappedY = null;
+      }
     }
   });
   socket.on('building_hit', ({ id, dmg } = {}) => {
     const building = buildings.get(id);
     if (!building) return;
-    const maxDamage = Number(building.type) === 6 ? 32 : 120;
+    const maxDamage = Number(building.type) === 6 ? 45 : 120;
     building.hp = Math.max(0, (building.hp ?? building.maxHp ?? 100) - Math.max(1, Math.min(maxDamage, Number(dmg) || 1)));
     io.emit('build_hp_update', { id, hp: building.hp });
     if (building.hp <= 0) {
@@ -2326,7 +2342,11 @@ io.on('connection', (socket) => {
       io.emit('build_destroy', { id });
       io.emit('trap_freed', { buildingId: id });
       for (const p of players.values()) {
-        if (p.trappedBy === id) p.trappedBy = null;
+        if (p.trappedBy === id) {
+          p.trappedBy = null;
+          p.trappedX = null;
+          p.trappedY = null;
+        }
       }
     }
   });
