@@ -1,6 +1,5 @@
 const http = require('http');
 const fs = require('fs');
-const fsp = fs.promises;
 const path = require('path');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
@@ -73,17 +72,19 @@ const MOB_TYPES = [
   { shape: 'bear', color: '#4a2f1b', outline: '#1a1008', eyes: '#ffaa00', typeName: '🐻 Ayı', radius: 65, hp: 950, dmg: 72, speed: 14, wanderSpeed: 8, xpReward: 320, goldReward: 140 },
   { shape: 'spider', color: '#2a1a38', outline: '#0f0814', eyes: '#ff1100', typeName: '🕷️ Örümcek', radius: 48, hp: 380, dmg: 34, speed: 17, wanderSpeed: 9, xpReward: 100, goldReward: 45 },
 ];
-const dataFile = process.env.DATA_FILE || path.join(__dirname, 'forest-data.json');
+const legacyDataFile = process.env.DATA_FILE || path.join(__dirname, 'forest-data.json');
 const databaseFile = process.env.DATABASE_FILE || path.join(__dirname, 'forestbrawl.db');
 let sqliteDb = null;
 try {
   sqliteDb = new DatabaseSync(databaseFile);
+  sqliteDb.exec('PRAGMA journal_mode = WAL;');
+  sqliteDb.exec('PRAGMA synchronous = NORMAL;');
   sqliteDb.exec('CREATE TABLE IF NOT EXISTS game_state (state_key TEXT PRIMARY KEY, state_json TEXT NOT NULL, updated_at INTEGER NOT NULL)');
-  console.log(`[Database] SQLite ready: ${databaseFile}`);
+  console.log(`[Database] SQLite ready (WAL mode): ${databaseFile}`);
 } catch (error) {
-  console.warn(`[Database] SQLite unavailable, using JSON fallback: ${error.message}`);
+  console.warn(`[Database] SQLite initialization error: ${error.message}`);
 }
-const authSecret = process.env.AUTH_SECRET || crypto.createHash('sha256').update(`forestbrawl:${path.resolve(dataFile)}`).digest('hex');
+const authSecret = process.env.AUTH_SECRET || crypto.createHash('sha256').update(`forestbrawl:${path.resolve(legacyDataFile)}`).digest('hex');
 if (!process.env.AUTH_SECRET) console.warn('[Security] AUTH_SECRET is not set; using a stable development secret. Set AUTH_SECRET in production.');
 const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS || 'https://forestbrawl.fun,https://www.forestbrawl.fun,http://localhost:3000').split(',').map(origin => origin.trim()).filter(Boolean));
 const worldSeed = 0x4F524553;
@@ -148,10 +149,28 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
 
 let accountData = { users: {}, clans: {}, leaderboard: {}, recentDeaths: [], nextId: 1 };
 
-function readSqliteSnapshot() {
+let _stmtInsertGameState = null;
+let _stmtSelectGameState = null;
+
+function getSqliteStatements() {
   if (!sqliteDb) return null;
+  if (!_stmtInsertGameState) {
+    try {
+      _stmtInsertGameState = sqliteDb.prepare('INSERT INTO game_state (state_key, state_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(state_key) DO UPDATE SET state_json = excluded.state_json, updated_at = excluded.updated_at');
+      _stmtSelectGameState = sqliteDb.prepare('SELECT state_json FROM game_state WHERE state_key = ?');
+    } catch (e) {
+      console.warn('[Database] Prepare statement error:', e.message);
+      return null;
+    }
+  }
+  return { insert: _stmtInsertGameState, select: _stmtSelectGameState };
+}
+
+function readSqliteSnapshot() {
+  const stmts = getSqliteStatements();
+  if (!stmts) return null;
   try {
-    const row = sqliteDb.prepare('SELECT state_json FROM game_state WHERE state_key = ?').get('account');
+    const row = stmts.select.get('account');
     return row ? JSON.parse(row.state_json) : null;
   } catch (error) {
     console.warn(`[Database] SQLite read failed: ${error.message}`);
@@ -160,9 +179,10 @@ function readSqliteSnapshot() {
 }
 
 function writeSqliteSnapshot(snapshot) {
-  if (!sqliteDb) return;
+  const stmts = getSqliteStatements();
+  if (!stmts) return;
   try {
-    sqliteDb.prepare('INSERT INTO game_state (state_key, state_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(state_key) DO UPDATE SET state_json = excluded.state_json, updated_at = excluded.updated_at').run('account', JSON.stringify(snapshot), Date.now());
+    stmts.insert.run('account', JSON.stringify(snapshot), Date.now());
   } catch (error) {
     console.warn(`[Database] SQLite write failed: ${error.message}`);
   }
@@ -181,7 +201,14 @@ function loadAccountData() {
     }
   };
 
-  let parsed = readSqliteSnapshot() || tryLoadFrom(dataFile) || tryLoadFrom(dataFile + '.bak');
+  let parsed = readSqliteSnapshot();
+  if (!parsed) {
+    parsed = tryLoadFrom(legacyDataFile) || tryLoadFrom(legacyDataFile + '.bak');
+    if (parsed) {
+      console.log('[Database] Migrated existing accounts and clans from JSON into SQLite database.');
+    }
+  }
+
   if (parsed && typeof parsed === 'object') {
     const rawUsers = parsed.users || {};
     const cleanUsers = {};
@@ -222,7 +249,7 @@ function loadAccountData() {
       recentDeaths: Array.isArray(parsed.recentDeaths) ? parsed.recentDeaths : [],
       nextId: Math.max(parsed.nextId || 1, Object.keys(cleanUsers).length + 1)
     };
-    console.log(`[Database] Loaded ${Object.keys(cleanUsers).length} users and ${Object.keys(accountData.clans).length} clans.`);
+    console.log(`[Database] Loaded ${Object.keys(cleanUsers).length} users and ${Object.keys(accountData.clans).length} clans from SQLite.`);
   } else {
     console.log('[Database] Starting with fresh database.');
     accountData = { users: {}, clans: {}, leaderboard: {}, recentDeaths: [], nextId: 1 };
@@ -234,49 +261,20 @@ loadAccountData();
 for (const clan of Object.values(accountData.clans || {})) clans.set(clan.id, clan);
 
 let _saveTimeout = null;
-let _saveInFlight = null;
-let _saveQueued = false;
 function saveAccountData(immediate = false) {
-  const doSave = async () => {
-    if (_saveInFlight) {
-      _saveQueued = true;
-      return _saveInFlight;
-    }
+  const doSave = () => {
     try {
       accountData.users = { ...(accountData.users || {}) };
       accountData.clans = Object.fromEntries(clans);
-      const dataStr = JSON.stringify(accountData, null, 2);
-      const tmpFile = dataFile + '.tmp';
-      const bakFile = dataFile + '.bak';
       writeSqliteSnapshot(accountData);
-
-      // Atomic write to tmp file
-      _saveInFlight = (async () => {
-        await fsp.writeFile(tmpFile, dataStr, 'utf8');
-
-        // Backup current file if exists
-        try { await fsp.copyFile(dataFile, bakFile); } catch (error) {
-          if (error.code !== 'ENOENT') throw error;
-        }
-
-        // Rename tmp to dataFile
-        await fsp.rename(tmpFile, dataFile);
-      })();
-      await _saveInFlight;
     } catch (error) {
-      console.warn('Could not save account data:', error.message);
-    } finally {
-      _saveInFlight = null;
-      if (_saveQueued) {
-        _saveQueued = false;
-        void doSave();
-      }
+      console.warn('[Database] Could not save account data to SQLite:', error.message);
     }
   };
 
   if (immediate) {
     if (_saveTimeout) { clearTimeout(_saveTimeout); _saveTimeout = null; }
-    return doSave();
+    doSave();
   } else {
     if (!_saveTimeout) {
       _saveTimeout = setTimeout(() => {
@@ -289,8 +287,8 @@ function saveAccountData(immediate = false) {
 
 // Auto-save every 20 seconds and flush on process exit
 setInterval(() => saveAccountData(true), 20000);
-process.on('SIGINT', async () => { await saveAccountData(true); process.exit(0); });
-process.on('SIGTERM', async () => { await saveAccountData(true); process.exit(0); });
+process.on('SIGINT', () => { saveAccountData(true); process.exit(0); });
+process.on('SIGTERM', () => { saveAccountData(true); process.exit(0); });
 
 function publicUser(user) {
   const rInfo = rankInfo(user.xp || 0);
@@ -1103,6 +1101,64 @@ function previewResources() {
 }
 const previewWorldResources = previewResources();
 
+const worldResourceHp = new Map();
+const RESOURCE_MAX_HP = { wood: 100, stone: 150, gold: 200, apple: 80, bush: 60, mushroom: 50, crystal: 250, hive: 120 };
+(function initResourceHp() {
+  for (let i = 0; i < previewWorldResources.length; i++) {
+    const res = previewWorldResources[i];
+    const maxHp = RESOURCE_MAX_HP[res.type] || 100;
+    worldResourceHp.set(i, { hp: maxHp, maxHp, deadUntil: 0 });
+  }
+})();
+
+function getResourceHpSnapshot() {
+  const snapshot = {};
+  const now = Date.now();
+  for (const [idx, state] of worldResourceHp) {
+    if (state.hp < state.maxHp || (state.deadUntil && state.deadUntil > now)) {
+      snapshot[idx] = { hp: state.hp, maxHp: state.maxHp, dead: Boolean(state.deadUntil && state.deadUntil > now) };
+    }
+  }
+  return snapshot;
+}
+
+// Lag compensation: rolling history buffer of player positions for the past 1000ms
+const POSITION_HISTORY_MAX = 35;
+const positionHistory = [];
+function recordPositionSnapshot() {
+  const now = Date.now();
+  const snapshot = { t: now, pos: new Map() };
+  for (const [id, p] of players) {
+    if (p && (p.hp ?? 0) > 0) {
+      snapshot.pos.set(id, { x: Number(p.x) || 0, y: Number(p.y) || 0 });
+    }
+  }
+  positionHistory.push(snapshot);
+  if (positionHistory.length > POSITION_HISTORY_MAX) {
+    positionHistory.shift();
+  }
+}
+
+function getRewoundPosition(targetId, targetTime) {
+  if (positionHistory.length === 0) {
+    const current = players.get(targetId);
+    return current ? { x: Number(current.x) || 0, y: Number(current.y) || 0 } : null;
+  }
+  let closest = positionHistory[0];
+  let minDiff = Math.abs(closest.t - targetTime);
+  for (let i = 1; i < positionHistory.length; i++) {
+    const diff = Math.abs(positionHistory[i].t - targetTime);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = positionHistory[i];
+    }
+  }
+  const pos = closest.pos.get(targetId);
+  if (pos) return pos;
+  const current = players.get(targetId);
+  return current ? { x: Number(current.x) || 0, y: Number(current.y) || 0 } : null;
+}
+
 function findSafeMobSpawn() {
   const maxCoord = 3600;
   const minMobDist = 200;
@@ -1407,18 +1463,48 @@ setInterval(() => {
   if (changed.length) broadcastMobStates(changed);
 }, 100);
 
-// 30Hz Server Game Tick: Batches all living player states into ONE ultra-compact broadcast packet (eliminates packet flood & buffer bloat)
+// 30Hz Server Game Tick: records position history and broadcasts with Area of Interest (AOI) culling
 setInterval(() => {
   if (players.size === 0) return;
-  const batch = {};
-  let count = 0;
-  for (const [id, p] of players) {
-    if (!p || (p.hp ?? 0) <= 0) continue;
-    batch[id] = compactState(p, false);
-    count++;
-  }
-  if (count > 0) {
-    io.volatile.emit('players', batch);
+  recordPositionSnapshot();
+
+  if (players.size <= 3) {
+    const batch = {};
+    let count = 0;
+    for (const [id, p] of players) {
+      if (!p || (p.hp ?? 0) <= 0) continue;
+      batch[id] = compactState(p, false);
+      count++;
+    }
+    if (count > 0) io.volatile.emit('players', batch);
+  } else {
+    // AOI Culling: Each player only receives updates for entities within their active viewport range (~2400px)
+    for (const [id, s] of io.sockets.sockets) {
+      if (s.data.isSpectator) {
+        const fullBatch = {};
+        for (const [pid, p] of players) {
+          if (p && (p.hp ?? 0) > 0) fullBatch[pid] = compactState(p, false);
+        }
+        s.volatile.emit('players', fullBatch);
+        continue;
+      }
+      const self = players.get(id);
+      if (!self || (self.hp ?? 0) <= 0) continue;
+      const localBatch = {};
+      let localCount = 0;
+      for (const [otherId, other] of players) {
+        if (!other || (other.hp ?? 0) <= 0 || otherId === id) continue;
+        const dx = (Number(other.x) || 0) - (Number(self.x) || 0);
+        const dy = (Number(other.y) || 0) - (Number(self.y) || 0);
+        if (dx * dx + dy * dy < 2400 * 2400) {
+          localBatch[otherId] = compactState(other, false);
+          localCount++;
+        }
+      }
+      if (localCount > 0) {
+        s.volatile.emit('players', localBatch);
+      }
+    }
   }
 }, 33);
 
@@ -1429,7 +1515,17 @@ setInterval(() => {
     if (!p || (p.hp ?? 0) <= 0) continue;
     const s = io.sockets.sockets.get(id);
     if (s && s.connected) {
-      s.emit('self_state', { x: p.x, y: p.y, hp: p.hp, sc: p.score, g: p.gold, seq: p.stateSeq || 0 });
+      s.emit('self_state', {
+        x: p.x,
+        y: p.y,
+        hp: p.hp,
+        sc: p.score,
+        g: p.gold,
+        apples: p.apples || 0,
+        wood: p.wood || 0,
+        stone: p.stone || 0,
+        seq: p.stateSeq || 0
+      });
     }
   }
 }, 1000);
@@ -1503,7 +1599,7 @@ io.on('connection', (socket) => {
       players: currentPlayers,
       buildings: Object.fromEntries(buildings),
       worldSeed,
-      resHp: {},
+      resHp: getResourceHpSnapshot(),
       mobs: [...mobs.values()].map(publicMob),
       resources: previewWorldResources,
       airdrops: [...airdrops.values()].map(publicAirdrop),
@@ -1535,6 +1631,11 @@ io.on('connection', (socket) => {
       wood: 50,
       stone: 30,
       apples: 5,
+      gold: authUser ? Math.max(0, Number(authUser.gold || authUser.coins || 0)) : 0,
+      kills: 0,
+      lastSwingAt: 0,
+      lastArrowAt: 0,
+      lastEatAt: 0,
       _authUser: authUser
     };
     const requestedClan = clans.get(String(data.clanId || ''));
@@ -1554,7 +1655,7 @@ io.on('connection', (socket) => {
       players: others,
       buildings: Object.fromEntries(buildings),
       worldSeed,
-      resHp: {},
+      resHp: getResourceHpSnapshot(),
       mobs: [...mobs.values()].map(publicMob),
       airdrops: [...airdrops.values()].map(publicAirdrop),
       bountyId: currentBountyId,
@@ -1583,13 +1684,19 @@ io.on('connection', (socket) => {
         sc: 0,
         gold: 0,
         kills: 0,
+        wood: 50,
+        stone: 30,
+        apples: 5,
         x: spawnPt.x,
         y: spawnPt.y,
         vx: 0,
         vy: 0,
         angle: 0,
         stateSeq: 0,
-        stateAt: Date.now()
+        stateAt: Date.now(),
+        lastSwingAt: 0,
+        lastArrowAt: 0,
+        lastEatAt: 0
       };
       players.set(socket.id, player);
     } else {
@@ -1602,12 +1709,28 @@ io.on('connection', (socket) => {
       player.sc = 0;
       player.kills = 0;
       player.gold = 0;
+      player.wood = 50;
+      player.stone = 30;
+      player.apples = 5;
       player.trappedBy = null;
       player.stateSeq = 0;
       player.stateAt = Date.now();
+      player.lastSwingAt = 0;
+      player.lastArrowAt = 0;
+      player.lastEatAt = 0;
     }
     socket.emit('own_respawn', { x: spawnPt.x, y: spawnPt.y });
-    socket.emit('self_state', { x: spawnPt.x, y: spawnPt.y, hp: player.hp, sc: player.score, g: player.gold, seq: 0 });
+    socket.emit('self_state', {
+      x: spawnPt.x,
+      y: spawnPt.y,
+      hp: player.hp,
+      sc: player.score,
+      g: player.gold,
+      apples: player.apples,
+      wood: player.wood,
+      stone: player.stone,
+      seq: 0
+    });
     io.emit('player_respawn', { id: socket.id, state: compactFullState(player) });
     broadcastOnlineCount();
   });
@@ -1628,6 +1751,10 @@ io.on('connection', (socket) => {
       return;
     }
 
+    if (Number.isFinite(data.ping) && data.ping > 0) {
+      player.ping = Math.max(10, Math.min(400, Number(data.ping)));
+    }
+
     let needsPosCorrection = false;
     if (Number.isFinite(incomingX) && Number.isFinite(incomingY)) {
       const dx = incomingX - prevX;
@@ -1635,7 +1762,7 @@ io.on('connection', (socket) => {
       const dist = Math.hypot(dx, dy);
       const worldLimit = 7200;
       const elapsedMs = Math.max(16, Math.min(1000, Date.now() - (player.stateAt || Date.now())));
-      const maxAllowedDist = 90 + elapsedMs * 0.9; // Lag allowance plus a bounded movement budget
+      const maxAllowedDist = 95 + elapsedMs * 0.95; // Lag allowance plus a bounded movement budget
       if (Math.abs(incomingX) > worldLimit || Math.abs(incomingY) > worldLimit) {
         acceptedX = Math.max(-worldLimit, Math.min(worldLimit, incomingX));
         acceptedY = Math.max(-worldLimit, Math.min(worldLimit, incomingY));
@@ -1648,6 +1775,39 @@ io.on('connection', (socket) => {
         data.vx = (data.vx || 0) * ratio;
         data.vy = (data.vy || 0) * ratio;
         needsPosCorrection = true;
+      }
+
+      // Solid collision push-out against obstacles (trees, rocks, gold)
+      const nearbyObs = nearbyServerObstacles(acceptedX, acceptedY, 50);
+      for (let oi = 0; oi < nearbyObs.length; oi++) {
+        const obs = nearbyObs[oi];
+        const ox = acceptedX - obs.x, oy = acceptedY - obs.y;
+        const oDist2 = ox * ox + oy * oy;
+        const minODist = 36 + obs.radius;
+        if (oDist2 < minODist * minODist && oDist2 > 0) {
+          const oDist = Math.sqrt(oDist2) || 1;
+          const push = minODist - oDist;
+          acceptedX += (ox / oDist) * push;
+          acceptedY += (oy / oDist) * push;
+          if (push > 12) needsPosCorrection = true;
+        }
+      }
+
+      // Solid collision push-out against buildings (walls, spikes, etc.)
+      const nearbyB = nearbyBuildings(acceptedX, acceptedY, 90);
+      for (let bi = 0; bi < nearbyB.length; bi++) {
+        const b = nearbyB[bi];
+        if (b.type === 5) continue; // Boost pad allows walkover
+        const bdx = acceptedX - b.x, bdy = acceptedY - b.y;
+        const bdist2 = bdx * bdx + bdy * bdy;
+        const minBdist = 36 + (b.type === 8 ? 42 : 36);
+        if (bdist2 < minBdist * minBdist && bdist2 > 0) {
+          const bdist = Math.sqrt(bdist2) || 1;
+          const push = minBdist - bdist;
+          acceptedX += (bdx / bdist) * push;
+          acceptedY += (bdy / bdist) * push;
+          if (push > 12) needsPosCorrection = true;
+        }
       }
     }
 
@@ -1672,29 +1832,23 @@ io.on('connection', (socket) => {
       else if (key === 'y' && Number.isFinite(acceptedY)) player.y = acceptedY;
       else if (data[key] !== undefined) player[key] = data[key];
     }
-    const incomingKills = Number(data.kills);
-    const incomingXp = Number(data.xp);
-    const incomingGold = Number(data.gold);
-    const incomingScore = Number(data.sc ?? data.score);
-    if (Number.isFinite(incomingKills) && incomingKills >= 0) player.kills = incomingKills;
-    if (Number.isFinite(incomingXp) && incomingXp >= 0) player.xp = incomingXp;
-    if (Number.isFinite(incomingGold) && incomingGold >= 0) {
-      player.gold = incomingGold;
-      player.coins = incomingGold;
-    }
-    if (Number.isFinite(incomingScore) && incomingScore >= 0) player.score = incomingScore;
+
+    // Soft player-vs-player pushout without jitter
     if (!player.trappedBy) {
       for (const [otherId, other] of players) {
-        if (otherId === socket.id || !other || other.hp <= 0) continue;
+        if (otherId === socket.id || !other || (other.hp ?? 0) <= 0) continue;
         const dx = player.x - (Number(other.x) || 0);
         const dy = player.y - (Number(other.y) || 0);
         const minDistance = 68;
         const distanceSquared = dx * dx + dy * dy;
         if (distanceSquared >= minDistance * minDistance) continue;
         const distance = Math.sqrt(distanceSquared) || 0.01;
-        player.x += (dx / distance) * (minDistance - distance);
-        player.y += (dy / distance) * (minDistance - distance);
-        needsPosCorrection = true;
+        const overlap = minDistance - distance;
+        player.x += (dx / distance) * overlap * 0.5;
+        player.y += (dy / distance) * overlap * 0.5;
+        if (overlap > 18) {
+          needsPosCorrection = true;
+        }
         break;
       }
     }
@@ -1727,10 +1881,15 @@ io.on('connection', (socket) => {
     if (!Number.isFinite(angle)) return;
     const attackerX = Number(attacker.x) || 0, attackerY = Number(attacker.y) || 0;
     attacker.angle = angle;
+
+    // Lag compensation: rewind target positions to attacker's perspective (~40-100ms in past)
+    const clientRewindTime = now - Math.min(250, Math.max(25, Number(data.ping || attacker.ping || 60)));
+
     for (const [targetId, target] of players) {
       if (targetId === socket.id || target.hp <= 0) continue;
       if ((attacker.clanId && attacker.clanId === target.clanId) || (attacker.team && target.team && attacker.team === target.team)) continue;
-      const dx = (Number(target.x) || 0) - attackerX, dy = (Number(target.y) || 0) - attackerY;
+      const rewound = getRewoundPosition(targetId, clientRewindTime) || { x: target.x, y: target.y };
+      const dx = (Number(rewound.x) || 0) - attackerX, dy = (Number(rewound.y) || 0) - attackerY;
       if (Math.hypot(dx, dy) > range + 56) continue;
       let difference = Math.abs(Math.atan2(dy, dx) - angle);
       if (difference > Math.PI) difference = Math.PI * 2 - difference;
@@ -1745,6 +1904,7 @@ io.on('connection', (socket) => {
         target.kills = target.kills || 0;
         attacker.kills = (attacker.kills || 0) + 1;
         attacker.score = (attacker.score || 0) + 150;
+        attacker.gold = (attacker.gold || 0) + 50;
         if (BOUNTY_EVENT_ENABLED && currentBountyId && targetId === currentBountyId) {
           const bountyBonus = 300;
           attacker.gold = (attacker.gold || 0) + bountyBonus;
@@ -1769,6 +1929,9 @@ io.on('connection', (socket) => {
     const target = players.get(data.targetId);
     if (!attacker || !target || attacker.hp <= 0 || target.hp <= 0) return;
     if ((attacker.clanId && attacker.clanId === target.clanId) || (attacker.team && target.team && attacker.team === target.team)) return;
+    const now = Date.now();
+    if (now - (attacker.lastArrowAt || 0) < 550) return; // Arrow cooldown
+    attacker.lastArrowAt = now;
     const distance = Math.hypot((Number(target.x) || 0) - (Number(attacker.x) || 0), (Number(target.y) || 0) - (Number(attacker.y) || 0));
     if (distance > 950) return;
     const tier = Math.max(0, Math.min(5, Number(data.tier) || Number(attacker.axeTier) || 0));
@@ -1783,6 +1946,7 @@ io.on('connection', (socket) => {
       target.kills = target.kills || 0;
       attacker.kills = (attacker.kills || 0) + 1;
       attacker.score = (attacker.score || 0) + 150;
+      attacker.gold = (attacker.gold || 0) + 50;
       if (BOUNTY_EVENT_ENABLED && currentBountyId && data.targetId === currentBountyId) {
         const bountyBonus = 300;
         attacker.gold = (attacker.gold || 0) + bountyBonus;
@@ -1805,7 +1969,18 @@ io.on('connection', (socket) => {
     const target = players.get(data.targetId);
     if (!target || target.hp <= 0) return;
     if (owner && ((owner.clanId && owner.clanId === target.clanId) || (owner.team && target.team && owner.team === target.team))) return;
-    const damage = Math.max(1, Math.min(180, Number(data.dmg) || 60));
+    const buildingId = String(data.buildingId || data.id || '');
+    const spike = buildings.get(buildingId);
+    if (!spike || spike.type !== 3 || (spike.hp ?? 0) <= 0) return;
+    if (spike.ownerId !== socket.id) return;
+    const distToSpike = Math.hypot((Number(target.x) || 0) - spike.x, (Number(target.y) || 0) - spike.y);
+    if (distToSpike > (spike.radius || 45) + 60) return;
+    const now = Date.now();
+    const hitKey = `spike:${socket.id}:${data.targetId}`;
+    if (now - (mobHitCooldowns.get(hitKey) || 0) < 350) return;
+    mobHitCooldowns.set(hitKey, now);
+    const spikeTier = spike.tier || 0;
+    const damage = Math.min(180, Math.max(20, [35, 60, 95, 140, 190, 260][spikeTier] || 45));
     target.hp = Math.max(0, (target.hp ?? 250) - damage);
     io.to(data.targetId).emit('pvp_hit', { dmg: damage, fromName: owner?.name || 'Diken' });
     io.to(data.targetId).emit('self_state', { hp: target.hp });
@@ -1816,6 +1991,7 @@ io.on('connection', (socket) => {
       target.kills = target.kills || 0;
       owner.kills = (owner.kills || 0) + 1;
       owner.score = (owner.score || 0) + 150;
+      owner.gold = (owner.gold || 0) + 50;
       if (BOUNTY_EVENT_ENABLED && currentBountyId && data.targetId === currentBountyId) {
         const bountyBonus = 300;
         owner.gold = (owner.gold || 0) + bountyBonus;
@@ -1929,7 +2105,56 @@ io.on('connection', (socket) => {
   });
 
   socket.on('res_hit', (data = {}) => {
-    relayToOthers(socket, 'res_sync', { idx: data.idx, shake: true });
+    const idx = Number(data.idx);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= previewWorldResources.length) return;
+    const resDef = previewWorldResources[idx];
+    if (!resDef) return;
+    const player = players.get(socket.id);
+    if (!player || (player.hp ?? 0) <= 0) return;
+    const dist = Math.hypot((Number(player.x) || 0) - resDef.x, (Number(player.y) || 0) - resDef.y);
+    if (dist > 250) return;
+
+    const now = Date.now();
+    const resState = worldResourceHp.get(idx) || { hp: 100, maxHp: 100, deadUntil: 0 };
+    if (resState.deadUntil && now < resState.deadUntil) return;
+
+    const hitKey = `res:${socket.id}:${idx}`;
+    if (now - (mobHitCooldowns.get(hitKey) || 0) < 180) return;
+    mobHitCooldowns.set(hitKey, now);
+
+    const weapon = Number(player.weapon) === 2 ? 2 : 1;
+    const tier = Math.max(0, Math.min(5, Number(weapon === 2 ? player.swordTier : player.axeTier) || 0));
+    const hitDmg = Math.round((weapon === 1 ? 28 : 16) * [1, 1.4, 2, 3, 4.5, 7][tier]);
+    resState.hp = Math.max(0, resState.hp - hitDmg);
+
+    const resYield = Math.max(1, Math.round(5 * (1 + tier * 0.5)));
+    if (resDef.type === 'wood') player.wood = (player.wood || 0) + resYield;
+    else if (resDef.type === 'stone') player.stone = (player.stone || 0) + resYield;
+    else if (resDef.type === 'gold') player.gold = (player.gold || 0) + resYield;
+    else if (resDef.type === 'apple') player.apples = (player.apples || 0) + Math.max(1, Math.round(resYield * 0.4));
+    player.score = (player.score || 0) + resYield * 2;
+
+    if (resState.hp <= 0) {
+      resState.deadUntil = now + 25000;
+      resState.hp = 0;
+      io.emit('res_destroyed', { idx });
+      setTimeout(() => {
+        resState.hp = resState.maxHp;
+        resState.deadUntil = 0;
+        io.emit('res_respawn', { idx });
+      }, 25000);
+    } else {
+      relayToOthers(socket, 'res_sync', { idx, shake: true, hp: resState.hp });
+    }
+    worldResourceHp.set(idx, resState);
+    socket.emit('self_state', {
+      wood: player.wood,
+      stone: player.stone,
+      gold: player.gold,
+      apples: player.apples,
+      sc: player.score,
+      seq: player.stateSeq || 0
+    });
   });
 
   socket.on('chat', (data = {}) => io.emit('chat', { name: players.get(socket.id)?.name || 'Oyuncu', msg: String(data.msg || '').slice(0, 200), id: socket.id }));
@@ -1967,8 +2192,15 @@ io.on('connection', (socket) => {
   });
   socket.on('eat_apple', () => {
     const player = players.get(socket.id);
-    if (player) player.hp = Math.min(player.maxHp ?? 250, (player.hp ?? 0) + 30);
-    socket.emit('self_state', { hp: player?.hp ?? 250 });
+    if (!player || (player.hp ?? 0) <= 0) return;
+    const now = Date.now();
+    if (now - (player.lastEatAt || 0) < 140) return;
+    if ((player.apples || 0) <= 0) return;
+    player.lastEatAt = now;
+    player.apples--;
+    player.hp = Math.min(player.maxHp ?? 250, (player.hp ?? 0) + 30);
+    socket.emit('self_state', { hp: player.hp, apples: player.apples, seq: player.stateSeq || 0 });
+    io.emit('players', { [socket.id]: compactState(player) });
   });
 
   socket.on('mob_hit_req', (data = {}) => {
