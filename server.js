@@ -1672,6 +1672,17 @@ io.on('connection', (socket) => {
       else if (key === 'y' && Number.isFinite(acceptedY)) player.y = acceptedY;
       else if (data[key] !== undefined) player[key] = data[key];
     }
+    const incomingKills = Number(data.kills);
+    const incomingXp = Number(data.xp);
+    const incomingGold = Number(data.gold);
+    const incomingScore = Number(data.sc ?? data.score);
+    if (Number.isFinite(incomingKills) && incomingKills >= 0) player.kills = incomingKills;
+    if (Number.isFinite(incomingXp) && incomingXp >= 0) player.xp = incomingXp;
+    if (Number.isFinite(incomingGold) && incomingGold >= 0) {
+      player.gold = incomingGold;
+      player.coins = incomingGold;
+    }
+    if (Number.isFinite(incomingScore) && incomingScore >= 0) player.score = incomingScore;
     if (!player.trappedBy) {
       for (const [otherId, other] of players) {
         if (otherId === socket.id || !other || other.hp <= 0) continue;

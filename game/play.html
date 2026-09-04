@@ -4769,19 +4769,19 @@ function openTabScoreboard() {
   if (!el) return;
   el.style.display = 'flex';
   // Build rows: self + other players sorted by kills desc
-  const all = [{ name: player.name || 'Sen', kills: player.kills, xp: player.xp, score: player.score||0, isSelf: true, rankId: _myRankId || 0 }];
-  _otherPlayers.forEach(p => { all.push({ name: p.name || '?', kills: p.kills || 0, xp: p.xp || 0, score: p.score||0, isSelf: false, rankId: p.rankId || 0 }); });
-  all.sort((a, b) => (b.score - a.score) || (b.kills - a.kills));
+  const all = [{ name: player.name || 'Sen', gold: player.gold || 0, kills: player.kills, xp: player.xp, score: player.score||0, isSelf: true, rankId: _myRankId || 0 }];
+  _otherPlayers.forEach(p => { all.push({ name: p.name || '?', gold: p.gold || 0, kills: p.kills || 0, xp: p.xp || 0, score: p.score||0, isSelf: false, rankId: p.rankId || 0 }); });
+  all.sort((a, b) => (b.gold - a.gold) || (b.kills - a.kills));
   const rows = document.getElementById('tab-sb-rows');
   if (!rows) return;
   rows.innerHTML = all.slice(0, 12).map((p, i) => {
     const bg = p.isSelf ? 'rgba(100,200,50,0.18)' : i === 0 ? 'rgba(255,200,0,0.12)' : 'rgba(255,255,255,0.05)';
     const border = p.isSelf ? '1px solid rgba(100,200,50,0.4)' : i === 0 ? '1px solid rgba(255,200,0,0.3)' : '1px solid rgba(255,255,255,0.07)';
-    const sc = p.score || 0;
+    const sc = p.gold || 0;
     const scStr = sc >= 1000 ? (sc/1000).toFixed(1)+'K' : String(sc);
     return `<div style="display:flex;align-items:center;gap:8px;background:${bg};border:${border};border-radius:8px;padding:5px 10px;font-size:12px;">
       <span style="flex:1;font-weight:${p.isSelf ? 800 : 600};color:${p.isSelf ? '#8ddc52' : '#fff'}">${p.name}${p.isSelf ? ' (Sen)' : ''}</span>
-      <span style="color:#ffd700;font-weight:800">${scStr}</span>
+      <span style="color:#ffd700;font-weight:800"><img src="asset/gold.png" alt="Altın" style="width:14px;height:14px;vertical-align:-2px"> ${scStr}</span>
     </div>`;
   }).join('');
 }
@@ -5474,7 +5474,7 @@ let _pendingNameTags = [];
 let _ping = 0;
 let _pingTimer = 0;
 let _stateTimer = 0;
-let _lastEmitX = 0, _lastEmitY = 0, _lastEmitAngle = 0, _lastEmitHp = 100, _lastEmitScore = 0, _lastEmitAttacking = false;
+let _lastEmitX = 0, _lastEmitY = 0, _lastEmitAngle = 0, _lastEmitHp = 100, _lastEmitScore = 0, _lastEmitGold = 0, _lastEmitKills = 0, _lastEmitXp = 0, _lastEmitAttacking = false;
 let _lastEmitVx = 0, _lastEmitVy = 0; // ② velocity change detection for delta emit
 let _chatInput = null;
 let _isDying = false; // guard against double-die (pvp_hit + pvp_killed race)
@@ -16127,12 +16127,16 @@ function _mpUpdate() {
     const da = Math.abs(player.angle - _lastEmitAngle);
     const dhp = Math.abs(player.hp - _lastEmitHp);
     const dsc = Math.abs((player.score || 0) - _lastEmitScore);
+    const dgold = Math.abs((player.gold || 0) - _lastEmitGold);
+    const dkills = Math.abs((player.kills || 0) - _lastEmitKills);
+    const dxp = Math.abs((player.xp || 0) - _lastEmitXp);
     // ② Also trigger if velocity changed significantly (catches initial movement)
     const dvx = Math.abs((player.vx||0) - (_lastEmitVx||0));
     const dvy = Math.abs((player.vy||0) - (_lastEmitVy||0));
-    if (dx > 0.4 || dy > 0.4 || da > 0.006 || dhp > 0.5 || dsc >= 10 || dvx > 0.4 || dvy > 0.4 || player.isAttacking || player.isAttacking !== _lastEmitAttacking || player.weapon >= 3) {
+    if (dx > 0.4 || dy > 0.4 || da > 0.006 || dhp > 0.5 || dsc >= 10 || dgold >= 1 || dkills >= 1 || dxp >= 1 || dvx > 0.4 || dvy > 0.4 || player.isAttacking || player.isAttacking !== _lastEmitAttacking || player.weapon >= 3) {
       _lastEmitX = player.x; _lastEmitY = player.y;
       _lastEmitAngle = player.angle; _lastEmitHp = player.hp; _lastEmitScore = player.score || 0;
+      _lastEmitGold = player.gold || 0; _lastEmitKills = player.kills || 0; _lastEmitXp = player.xp || 0;
       _lastEmitAttacking = player.isAttacking;
       _lastEmitVx = player.vx || 0; _lastEmitVy = player.vy || 0;
       // ⑤ CSP: record predicted position + increment seq
