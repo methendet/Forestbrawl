@@ -349,6 +349,34 @@
         @keyframes chestSpark { 0% { opacity:1; transform:translate(-50%,-50%) scale(.4) rotate(0deg); } 100% { opacity:0; transform:translate(calc(-50% + var(--sx)),calc(-50% + var(--sy))) scale(1.25) rotate(180deg); } }
         @keyframes chestReveal { 0% { opacity:0; transform:scale(.72) rotate(-4deg); } 65% { opacity:1; transform:scale(1.08) rotate(2deg); } 100% { opacity:1; transform:scale(1) rotate(0deg); } }
         @keyframes chestRarityPulse { 0%,100% { filter:brightness(1); } 50% { filter:brightness(1.45); } }
+        @keyframes chestSlotLight { 0%,100% { opacity:.35; transform:scaleX(.86); } 50% { opacity:1; transform:scaleX(1); } }
+        @keyframes chestCongrats { 0% { opacity:0; transform:translateY(12px) scale(.9); } 70% { opacity:1; transform:translateY(-2px) scale(1.04); } 100% { opacity:1; transform:translateY(0) scale(1); } }
+        .chest-opening-overlay { padding:clamp(10px,3vw,28px); overflow:auto; overscroll-behavior:contain; }
+        .chest-opening-panel { width:min(94vw,600px); max-height:92dvh; overflow:auto; padding:clamp(14px,3vw,26px); border:4px solid #f2d184; border-radius:clamp(18px,4vw,28px); background:linear-gradient(180deg,#3a1f0a,#140d08 88%); box-shadow:0 0 40px rgba(244,175,65,.45); }
+        .chest-opening-stage { display:grid; gap:clamp(12px,2.5vw,22px); justify-items:center; margin:clamp(14px,3vw,22px) auto; }
+        .chest-opening-ring { width:min(48vw,260px); aspect-ratio:1; border-radius:50%; border:10px solid #f9d98b; background:conic-gradient(from 0deg,#ffb703,#f77f00,#ffcb77,#ffb703,#f77f00,#ffcb77,#ffb703); box-shadow:inset 0 0 25px rgba(255,255,255,.2),0 0 30px rgba(255,180,58,.35); position:absolute; transform:rotate(0deg); transition:transform 4.2s cubic-bezier(.12,.86,.19,1); }
+        .chest-slot-frame { width:min(90vw,500px); height:clamp(96px,21vw,126px); position:relative; overflow:hidden; border:4px solid #f9d98b; border-radius:16px; background:linear-gradient(180deg,rgba(20,10,4,.98),rgba(58,28,8,.98)); box-shadow:0 0 22px rgba(255,184,55,.45),inset 0 0 18px rgba(0,0,0,.7); }
+        .chest-slot-track { height:100%; display:flex; align-items:center; gap:8px; padding:0 max(30px,calc(50% - 42px)); transform:translateX(0); transition:transform 4.2s cubic-bezier(.08,.82,.16,1); perspective:700px; }
+        .chest-slot-card { flex:0 0 84px; height:92px; border:2px solid rgba(255,220,140,.42); border-radius:10px; background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(0,0,0,.34)); display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+        .chest-slot-card img,.chest-slot-card canvas { width:72px; height:72px; object-fit:contain; }
+        .chest-slot-card span { position:absolute; bottom:2px; left:2px; right:2px; font:700 8px Arial,sans-serif; color:#fff2c4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .chest-slot-glass { position:absolute; inset:0; background:linear-gradient(90deg,rgba(8,4,2,.9),transparent 18%,transparent 82%,rgba(8,4,2,.9)); pointer-events:none; }
+        .chest-slot-pointer { position:absolute; left:50%; top:-4px; bottom:-4px; width:4px; transform:translateX(-50%); background:#fff2a8; box-shadow:0 0 12px #ffd35a,0 0 24px rgba(255,191,45,.7); pointer-events:none; }
+        .chest-slot-pointer::before,.chest-slot-pointer::after { content:""; position:absolute; left:50%; width:12px; height:12px; border:3px solid #fff2a8; transform:translateX(-50%) rotate(45deg); background:#ff9f43; }
+        .chest-slot-pointer::before { top:-4px; border-right:0; border-bottom:0; }
+        .chest-slot-pointer::after { bottom:-4px; border-left:0; border-top:0; }
+        .chest-opening-light { width:min(80vw,380px); height:3px; background:#ffd35a; box-shadow:0 0 16px #ffd35a; animation:chestSlotLight 1.1s ease-in-out infinite; }
+        .chest-congrats { display:none; animation:chestCongrats .55s cubic-bezier(.16,1,.3,1) both; }
+        .chest-congrats.is-visible { display:block; }
+        @media (orientation:landscape) and (max-height:600px) {
+            .chest-opening-panel { max-height:94dvh; }
+            .chest-opening-stage { grid-template-columns:minmax(150px,.7fr) minmax(280px,1.3fr); align-items:center; }
+            .chest-opening-stage > .chest-slot-frame { grid-column:2; grid-row:1; }
+            .chest-opening-stage > .chest-opening-ring { grid-column:1; grid-row:1; position:relative; }
+        }
+        @media (prefers-reduced-motion:reduce) {
+            .chest-opening-ring,.chest-slot-track,.chest-opening-light,.chest-congrats { animation:none !important; transition:none !important; }
+        }
         .quest-reward-particle { position:absolute; font-size:22px; animation:questParticle 1s ease-out forwards; }
         @keyframes questParticle { from { opacity:1; transform:translate(0,0) scale(1); } to { opacity:0; transform:translate(var(--dx),var(--dy)) scale(.5); } }
 
@@ -2378,36 +2406,40 @@
 
             overlay = document.createElement('div');
             overlay.id = 'chest-spin-overlay';
+            overlay.className = 'chest-opening-overlay';
             overlay.style.position = 'fixed';
             overlay.style.inset = '0';
             overlay.style.background = 'rgba(8, 7, 10, 0.82)';
-            overlay.style.display = 'flex';
-            overlay.style.alignItems = 'center';
-            overlay.style.justifyContent = 'center';
-            overlay.style.zIndex = '9999';
-            overlay.style.backdropFilter = 'blur(5px)';
-            overlay.innerHTML = `
-                <div id="chest-spin-panel" style="width:min(90vw, 440px); background:linear-gradient(180deg,#3a1f0a,#140d08); border:4px solid #f2d184; border-radius:24px; box-shadow:0 0 32px rgba(244,175,65,0.45); padding:18px; text-align:center; position:relative; overflow:hidden;">
-                  <div style="position:absolute; inset:0; background:radial-gradient(circle at center, rgba(255,216,111,0.18), rgba(0,0,0,0)); pointer-events:none;"></div>
-                  <div style="position:relative; z-index:1;">
-                    <div style="font-family:Arial, sans-serif; font-size:12px; letter-spacing:3px; text-transform:uppercase; color:#f9d98b; margin-bottom:6px;">CHEST OPENING</div>
-                    <div id="chest-spin-rarity" style="display:inline-block; font:900 11px Arial,sans-serif; letter-spacing:2px; color:#f9d98b; border:1px solid currentColor; border-radius:999px; padding:4px 10px; animation:chestRarityPulse 1.6s ease-in-out infinite;">SIRADAN ÖDÜL</div>
-                    <div style="display:flex; align-items:center; justify-content:center; position:relative; margin:18px auto; width:220px; height:220px;">
-                      <div id="chest-spin-ring" style="width:200px; height:200px; border-radius:50%; border:10px solid #f9d98b; background:conic-gradient(from 0deg, #ffb703, #f77f00, #ffcb77, #ffb703, #f77f00, #ffcb77, #ffb703); box-shadow: inset 0 0 25px rgba(255,255,255,0.2), 0 0 30px rgba(255,180,58,0.35); position:absolute; transform:rotate(0deg); transition:transform 4.2s cubic-bezier(0.12, 0.86, 0.19, 1);"></div>
-                                            <div id="chest-spin-reel-window" style="width:286px; height:118px; position:absolute; overflow:hidden; border:4px solid #f9d98b; border-radius:16px; background:linear-gradient(180deg,rgba(20,10,4,.98),rgba(58,28,8,.98)); box-shadow:0 0 22px rgba(255,184,55,.45), inset 0 0 18px rgba(0,0,0,.7);">
-                                                <div id="chest-spin-reel-track" style="height:100%; display:flex; align-items:center; gap:8px; padding:0 101px; transform:translateX(0); transition:transform 4.2s cubic-bezier(0.08,0.82,0.16,1); perspective:700px;"></div>
-                                                <div style="position:absolute; inset:0; background:linear-gradient(90deg,rgba(8,4,2,.9),transparent 18%,transparent 82%,rgba(8,4,2,.9)); pointer-events:none;"></div>
-                                                <div style="position:absolute; left:50%; top:-4px; bottom:-4px; width:4px; transform:translateX(-50%); background:#fff2a8; box-shadow:0 0 12px #ffd35a,0 0 24px rgba(255,191,45,.7); pointer-events:none;"></div>
+                        overlay.style.display = 'flex';
+                        overlay.style.alignItems = 'center';
+                        overlay.style.justifyContent = 'center';
+                        overlay.innerHTML = `
+                                <div id="chest-spin-panel" class="chest-opening-panel" role="dialog" aria-modal="true" aria-labelledby="chest-spin-title">
+                                    <div style="position:absolute; inset:0; background:radial-gradient(circle at center,rgba(255,216,111,.18),rgba(0,0,0,0)); pointer-events:none;"></div>
+                                    <div style="position:relative; z-index:1; text-align:center;">
+                                        <div id="chest-spin-title" style="font:900 clamp(12px,2.5vw,15px) Arial,sans-serif; letter-spacing:clamp(2px,1vw,4px); text-transform:uppercase; color:#f9d98b;">CHEST OPENING</div>
+                                        <div id="chest-spin-rarity" style="display:inline-block; margin-top:8px; font:900 11px Arial,sans-serif; letter-spacing:2px; color:#f9d98b; border:1px solid currentColor; border-radius:999px; padding:4px 10px; animation:chestRarityPulse 1.6s ease-in-out infinite;">SIRADAN ÖDÜL</div>
+                                        <div class="chest-opening-stage">
+                                            <div id="chest-spin-ring" class="chest-opening-ring" aria-hidden="true"></div>
+                                            <div id="chest-spin-reel-window" class="chest-slot-frame">
+                                                <div id="chest-spin-reel-track" class="chest-slot-track"></div>
+                                                <div class="chest-slot-glass"></div>
+                                                <div class="chest-slot-pointer"></div>
                                             </div>
-                    </div>
-                    <div id="chest-spin-text" style="font-family:Arial, sans-serif; font-weight:700; font-size:17px; color:#fff5d6; min-height:26px; margin-top:8px;">Şanslı ödül hazırlanıyor...</div>
-                    <div id="chest-spin-candidates" style="display:flex; justify-content:center; gap:6px; flex-wrap:wrap; min-height:42px; margin:8px auto 2px; max-width:360px;"></div>
-                    <div id="chest-spin-reward" style="margin:18px auto 8px; width:120px; height:120px; display:flex; align-items:center; justify-content:center; border-radius:18px; border:3px solid rgba(255,210,122,0.85); background:rgba(31,18,10,0.9); overflow:hidden; opacity:0; transform:scale(0.72); transition:all 260ms ease; box-shadow:0 0 16px rgba(255,210,122,0.25);"></div>
-                    <button id="chest-spin-skip" style="margin-top:14px; width:100%; border:1px solid rgba(255,220,140,.4); border-radius:10px; background:rgba(255,255,255,.07); color:#ffe9b0; font-weight:700; letter-spacing:.6px; padding:9px 14px; cursor:pointer; display:block; font-size:11px; text-transform:uppercase;">HEMEN GÖSTER</button>
-                    <button id="chest-spin-close" style="margin-top:8px; width:100%; border:none; border-radius:12px; background:linear-gradient(180deg,#f7c35a,#d58a1a); color:#1a1207; font-weight:900; letter-spacing:1px; padding:12px 18px; cursor:pointer; display:none; font-size:13px; text-transform:uppercase;">KAPAT</button>
-                  </div>
-                </div>
-            `;
+                                        </div>
+                                        <div class="chest-opening-light"></div>
+                                        <div id="chest-spin-text" style="font:700 clamp(15px,4vw,19px) Arial,sans-serif; color:#fff5d6; min-height:28px; margin-top:12px;">Şanslı ödül hazırlanıyor...</div>
+                                        <div id="chest-spin-candidates" style="display:flex; justify-content:center; gap:6px; flex-wrap:wrap; min-height:42px; margin:10px auto 2px; max-width:520px;"></div>
+                                        <div id="chest-spin-reward" style="margin:16px auto 8px; width:min(30vw,132px); height:min(30vw,132px); min-width:92px; min-height:92px; display:flex; align-items:center; justify-content:center; border-radius:18px; border:3px solid rgba(255,210,122,.85); background:rgba(31,18,10,.9); overflow:hidden; opacity:0; transform:scale(.72); transition:all 260ms ease; box-shadow:0 0 16px rgba(255,210,122,.25);"></div>
+                                        <div id="chest-spin-congrats" class="chest-congrats" aria-live="polite">
+                                            <div style="font:900 clamp(20px,6vw,30px) Arial,sans-serif; color:#ffe27a; letter-spacing:1px; text-shadow:0 0 16px rgba(255,191,45,.8);">TEBRİKLER!</div>
+                                            <div id="chest-spin-equipped" style="margin-top:4px; color:#fff5d6; font:700 clamp(12px,3vw,15px) Arial,sans-serif;">Ödülün otomatik kuşanıldı.</div>
+                                        </div>
+                                        <button id="chest-spin-skip" style="margin-top:14px; width:100%; border:1px solid rgba(255,220,140,.4); border-radius:10px; background:rgba(255,255,255,.07); color:#ffe9b0; font-weight:700; letter-spacing:.6px; padding:10px 14px; cursor:pointer; display:block; font-size:11px; text-transform:uppercase;">HEMEN GÖSTER</button>
+                                        <button id="chest-spin-close" style="margin-top:8px; width:100%; border:none; border-radius:12px; background:linear-gradient(180deg,#f7c35a,#d58a1a); color:#1a1207; font-weight:900; letter-spacing:1px; padding:12px 18px; cursor:pointer; display:none; font-size:13px; text-transform:uppercase;">DEVAM ET</button>
+                                    </div>
+                                </div>
+                        `;
             overlay.addEventListener('click', (event) => {
                 if (event.target === overlay) {
                     overlay._chestSpinCleanup?.();
@@ -2431,6 +2463,8 @@
             const rarityEl = overlay.querySelector('#chest-spin-rarity');
             const textEl = overlay.querySelector('#chest-spin-text');
             const rewardEl = overlay.querySelector('#chest-spin-reward');
+            const congratsEl = overlay.querySelector('#chest-spin-congrats');
+            const equippedEl = overlay.querySelector('#chest-spin-equipped');
             const candidatesEl = overlay.querySelector('#chest-spin-candidates');
             const reelTrack = overlay.querySelector('#chest-spin-reel-track');
             const skipBtn = overlay.querySelector('#chest-spin-skip');
@@ -2491,6 +2525,8 @@
             rewardEl.style.opacity = '0';
             rewardEl.style.transform = 'scale(0.72)';
             rewardEl.classList.remove('chestReveal');
+            congratsEl.classList.remove('is-visible');
+            equippedEl.textContent = 'Ödülün otomatik kuşanılacak.';
 
             textEl.textContent = `${rarityStyle.label}: ${chest.name} açılıyor...`;
             overlay.style.display = 'flex';
@@ -2523,12 +2559,15 @@
                 revealed = true;
                 clearInterval(candidateTimer);
                 timers.forEach(clearTimeout);
-                textEl.textContent = `${reward.name} çıktı!`;
+                equipCosmeticItem(reward.id, 'deriler');
+                textEl.textContent = `${reward.name} çıktı ve kuşanıldı!`;
                 rewardEl.style.opacity = '1';
                 rewardEl.style.transform = 'scale(1)';
                 rewardEl.classList.add('chestReveal');
+                equippedEl.textContent = `${reward.name} artık karakterinde aktif.`;
+                congratsEl.classList.add('is-visible');
                 skipBtn.style.display = 'none';
-                closeBtn.style.display = 'block';
+                closeBtn.style.display = 'none';
                 for (let index = 0; index < 18; index++) {
                     const spark = document.createElement('span');
                     spark.textContent = index % 2 ? '✦' : '◆';
@@ -2538,6 +2577,11 @@
                 }
                 triggerToast(`${reward.name} envanterine eklendi!`, 'fa-gift');
                 overlay._chestSpinReveal = null;
+                schedule(() => {
+                    overlay._chestSpinCleanup?.();
+                    overlay.style.display = 'none';
+                    closeBtn.style.display = 'block';
+                }, 2000);
             };
             overlay._chestSpinReveal = finishReveal;
             overlay._chestSpinCleanup = () => {
