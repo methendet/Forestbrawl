@@ -3057,7 +3057,7 @@ let _lastDamager = null; // tracks which enemy last damaged the player
 
 // Load equipped accessories and skin color from shop system
 const _shopAcc = JSON.parse(localStorage.getItem('fb_acc_equipped') || '{}');
-const _urlWepSkin = urlParams.get('wepSkin');
+const _urlWepSkin = urlParams.get('wepSkin') || localStorage.getItem('fb_weapon_skin') || _shopAcc.baltalar || _shopAcc.kiliclar;
 if (_urlWepSkin) {
   if (_urlWepSkin.startsWith('ba_')) _shopAcc.baltalar = _urlWepSkin;
   else if (_urlWepSkin.startsWith('ki_')) _shopAcc.kiliclar = _urlWepSkin;
@@ -3065,7 +3065,7 @@ if (_urlWepSkin) {
 const _SKIN_COL = {c_beige:'#d4a574',c_dark:'#5a4030',c_pink:'#e87fac',c_blue:'#4d8aff',c_purple:'#9b59b6',c_red:'#e84444',c_green:'#2ecc71',c_gold:'#f5c842'};
 const playerColor = (_shopAcc.renkler && _SKIN_COL[_shopAcc.renkler]) || decodeURIComponent(urlParams.get('color') || '#cda886');
 const playerAcc = _shopAcc; // {kanatlar, sapkalar, yuz, aksesuarlar, renkler}
-const _playerSkin = urlParams.get('skin') || localStorage.getItem('fb_skin') || 'default';
+const _playerSkin = urlParams.get('skin') || localStorage.getItem('fb_skin') || (_shopAcc && _shopAcc.deriler) || 'default';
 const SKIN_ARM_COLORS = {
   default:'#c4966a',panda:'#e8e8e8',fox:'#e06020',wolf:'#667788',
   rabbit:'#ccccdd',croc:'#3a7a28',frog:'#55cc44',polarbear:'#ddeeff',
@@ -13060,14 +13060,14 @@ function initMultiplayer() {
     if (typeof s.seq === 'number') {
       _mpLastAckedSeq = s.seq;
     }
-    // Server-authoritative hp/xp/kills/resources — always accept
+    // Server-authoritative hp/xp/kills/resources — preserve local progress without reverting
     if (typeof s.hp === 'number') player.hp = s.hp;
     if (player.hp <= 0 && !_isDying) die();
     if (typeof s.sc === 'number') player.score = Math.max(player.score || 0, s.sc);
-    if (typeof s.g === 'number') player.gold = s.g;
-    if (typeof s.apples === 'number') player.apples = s.apples;
-    if (typeof s.wood === 'number') player.wood = s.wood;
-    if (typeof s.stone === 'number') player.stone = s.stone;
+    if (typeof s.g === 'number') player.gold = Math.max(player.gold || 0, s.g);
+    if (typeof s.apples === 'number') player.apples = Math.max(player.apples || 0, s.apples);
+    if (typeof s.wood === 'number') player.wood = Math.max(player.wood || 0, s.wood);
+    if (typeof s.stone === 'number') player.stone = Math.max(player.stone || 0, s.stone);
     // Reconcile if position diverges significantly (e.g. server collision push or lag spike)
     if (typeof s.x === 'number' && typeof s.y === 'number' && !player.dead && !_isDying) {
       const pDist = Math.hypot(s.x - player.x, s.y - player.y);
@@ -13814,19 +13814,26 @@ function _mpUpdate() {
   }
 }
 
+let _bgTabHeartbeat = null;
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && _connected && _socket && player && !player.dead) {
-    _socket.emit('state', {
-      x: player.x, y: player.y, angle: player.angle,
-      vx: 0, vy: 0, hp: player.hp, maxHp: player.maxHp,
-      weapon: player.weapon, isAttacking: false,
-      kills: player.kills, xp: player.xp, gold: player.gold || 0,
-      sc: player.score || 0,
-      axeTier: _wepTier(_axeXP), swordTier: _wepTier(_swordXP),
-      skin: _playerSkin,
-      rankId: Math.min(typeof _myRankId !== 'undefined' ? _myRankId : 0, 11),
-      acc: { a: playerAcc.aksesuarlar, y: playerAcc.yuz, s: playerAcc.sapkalar, k: playerAcc.kanatlar }
-    });
+  if (document.hidden) {
+    // When tab is hidden, browsers freeze requestAnimationFrame.
+    // Run a 200ms background interval to maintain connection, sync state, and allow mobs/PvP to hit us.
+    if (!_bgTabHeartbeat) {
+      _bgTabHeartbeat = setInterval(() => {
+        if (_connected && _socket && player && !player.dead) {
+          _mpSendState();
+        }
+      }, 200);
+    }
+  } else {
+    if (_bgTabHeartbeat) {
+      clearInterval(_bgTabHeartbeat);
+      _bgTabHeartbeat = null;
+    }
+    if (_connected && _socket && player && !player.dead) {
+      _mpSendState();
+    }
   }
 });
 

@@ -906,8 +906,8 @@ function serveStatic(request, response, requestPath) {
 
 const io = new Server(server, {
   path: '/api/socket.io',
-  pingInterval: 10000,
-  pingTimeout: 15000,
+  pingInterval: 25000,
+  pingTimeout: 60000,
   perMessageDeflate: false, // Disabling compression on high-frequency small packets eliminates CPU lag & buffer bloat
   maxHttpBufferSize: 1e6,
   cors: {
@@ -1356,7 +1356,7 @@ setInterval(() => {
         });
       }
       // Melee attack for all mobs
-      else if (distance < (mob.radius + 60) && now >= (mob.nextAttackAt || 0) && (now - (target.stateAt || 0) < 600)) {
+      else if (distance < (mob.radius + 60) && now >= (mob.nextAttackAt || 0)) {
         target.hp = Math.max(0, (target.hp ?? 250) - mob.dmg);
         mob.nextAttackAt = now + 1600;
         mob.chaseUntil = now + MOB_CHASE_TIMEOUT;
@@ -1521,9 +1521,6 @@ setInterval(() => {
         hp: p.hp,
         sc: p.score,
         g: p.gold,
-        apples: p.apples || 0,
-        wood: p.wood || 0,
-        stone: p.stone || 0,
         seq: p.stateSeq || 0
       });
     }
@@ -1824,7 +1821,7 @@ io.on('connection', (socket) => {
         releaseTrapVictim(socket.id, player.trappedBy);
       }
     }
-    for (const key of ['x', 'y', 'angle', 'vx', 'vy', 'isAttacking', 'attackTimer', 'attackDuration', 'weapon', 'axeTier', 'swordTier', 'team', 'color', 'skin', 'acc', 'buildX', 'buildY']) {
+    for (const key of ['x', 'y', 'angle', 'vx', 'vy', 'isAttacking', 'attackTimer', 'attackDuration', 'weapon', 'axeTier', 'swordTier', 'team', 'color', 'skin', 'acc', 'buildX', 'buildY', 'wood', 'stone', 'apples', 'gold', 'score', 'kills', 'xp']) {
       if (key === 'x' && Number.isFinite(acceptedX)) player.x = acceptedX;
       else if (key === 'y' && Number.isFinite(acceptedY)) player.y = acceptedY;
       else if (data[key] !== undefined) player[key] = data[key];
@@ -2159,14 +2156,6 @@ io.on('connection', (socket) => {
       relayToOthers(socket, 'res_sync', { idx, shake: true, hp: resState.hp });
     }
     worldResourceHp.set(idx, resState);
-    socket.emit('self_state', {
-      wood: player.wood,
-      stone: player.stone,
-      gold: player.gold,
-      apples: player.apples,
-      sc: player.score,
-      seq: player.stateSeq || 0
-    });
   });
 
   socket.on('chat', (data = {}) => io.emit('chat', { name: players.get(socket.id)?.name || 'Oyuncu', msg: String(data.msg || '').slice(0, 200), id: socket.id }));
@@ -2413,13 +2402,27 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     for (const key of mobHitCooldowns.keys()) if (key.startsWith(`${socket.id}:`)) mobHitCooldowns.delete(key);
-    deletePlayerBuildings(socket.id);
     const player = players.get(socket.id);
-    if (player && (player.score > 0 || player.gold > 0 || player.kills > 0)) {
-      persistPlayerScore(player);
+    if (player) {
+      player._disconnectedAt = Date.now();
+      if (player.score > 0 || player.gold > 0 || player.kills > 0) {
+        persistPlayerScore(player);
+      }
     }
+    // Give 45 seconds reconnection grace period before destroying buildings and deleting player
+    const disconnectedId = socket.id;
+    setTimeout(() => {
+      const p = players.get(disconnectedId);
+      const activeSock = io.sockets.sockets.get(disconnectedId);
+      if (p && (!activeSock || !activeSock.connected) && (Date.now() - (p._disconnectedAt || 0) >= 40000)) {
+        deletePlayerBuildings(disconnectedId);
+        players.delete(disconnectedId);
+        io.emit('player_left', { id: disconnectedId, name: p.name || 'Oyuncu' });
+        broadcastOnlineCount();
+      }
+    }, 45000);
+
     leaveClan(socket, false);
-    players.delete(socket.id);
     for (const [code, party] of parties) {
       const hadMember = party.members.some(member => member.id === socket.id);
       if (!hadMember) continue;
@@ -2428,7 +2431,6 @@ io.on('connection', (socket) => {
       if (!party.members.length) parties.delete(code);
       else io.to(`party:${code}`).emit('party_update', party);
     }
-    socket.broadcast.emit('player_left', { id: socket.id, name: player?.name || 'Oyuncu' });
     broadcastOnlineCount();
   });
 });

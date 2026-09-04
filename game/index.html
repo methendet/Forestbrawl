@@ -1667,7 +1667,20 @@
             context.restore();
         }
 
+        function updateActivePetDisplay() {
+            const char = REAL_SKINS.find(c => c.id === _currentSkin) || REAL_SKINS[0];
+            const nameEl = document.getElementById('active-pet-name');
+            if (nameEl && char) nameEl.textContent = char.name;
+            const apc = document.getElementById('active-pet-canvas');
+            if (apc) {
+                const actx = apc.getContext('2d');
+                actx.clearRect(0, 0, 86, 86);
+                drawExactInGamePlayer(actx, 38, 54, _currentSkin, _equippedWeapon, _animFrame, 0.44);
+            }
+        }
+
         function redrawCosmeticPreviews() {
+            updateActivePetDisplay();
             const canvases = [
                 ['cosmetic-preview-canvas', _cosmeticPreviewItem],
                 ['shop-preview-canvas', _shopPreviewItem]
@@ -2755,6 +2768,7 @@
                 localStorage.setItem('fb_acc_equipped', JSON.stringify(shopAcc));
             }
             redrawCosmeticPreviews();
+            updateActivePetDisplay();
             persistPlayerProfileState();
             
             if (_authToken) {
@@ -4061,6 +4075,38 @@
         function animateMenu() {
             _animFrame++;
 
+            // 1. Ana Ekran Aktif Karakter Canvası (Canlı & Sağa Bakan)
+            const apc = document.getElementById('active-pet-canvas');
+            if (apc) {
+                const actx = apc.getContext('2d');
+                actx.clearRect(0, 0, 86, 86);
+                drawExactInGamePlayer(actx, 38, 54, _currentSkin, _equippedWeapon, _animFrame, 0.44);
+            }
+
+            // 2. Cosmetics (Envanter) Önizleme Canvası (Canlı)
+            const cpc = document.getElementById('cosmetic-preview-canvas');
+            if (cpc) {
+                const cctx = cpc.getContext('2d');
+                cctx.clearRect(0, 0, 200, 200);
+                const prevSkin = (_cosmeticPreviewItem && _cosmeticPreviewItem.cat === 'deriler') ? _cosmeticPreviewItem.item.id : _currentSkin;
+                const prevWep = (_cosmeticPreviewItem && (_cosmeticPreviewItem.cat === 'baltalar' || _cosmeticPreviewItem.cat === 'kiliclar')) ? _cosmeticPreviewItem.item.id : _equippedWeapon;
+                drawExactInGamePlayer(cctx, 95, 125, prevSkin, prevWep, _animFrame, 0.74);
+            }
+
+            // 3. Shop (Mağaza) Önizleme Canvası (Canlı)
+            const spc = document.getElementById('shop-preview-canvas');
+            if (spc) {
+                const sctx = spc.getContext('2d');
+                sctx.clearRect(0, 0, 200, 200);
+                if (_shopPreviewItem && _shopPreviewItem.cat === 'chests') {
+                    drawChestIcon(sctx, 100, 100, _shopPreviewItem.item.rarity, 1.5, _animFrame);
+                } else {
+                    const prevSkin = (_shopPreviewItem && _shopPreviewItem.cat === 'deriler') ? _shopPreviewItem.item.id : _currentSkin;
+                    const prevWep = (_shopPreviewItem && (_shopPreviewItem.cat === 'baltalar' || _shopPreviewItem.cat === 'kiliclar')) ? _shopPreviewItem.item.id : _equippedWeapon;
+                    drawExactInGamePlayer(sctx, 95, 125, prevSkin, prevWep, _animFrame, 0.74);
+                }
+            }
+
             if (drawLivePreview()) {
                 requestAnimationFrame(animateMenu);
                 return;
@@ -4471,38 +4517,6 @@
                 vignette.addColorStop(1, 'rgba(0, 0, 0, 0.68)');
                 bgCtx.fillStyle = vignette;
                 bgCtx.fillRect(0, 0, bgW, bgH);
-            }
-
-            // 1. Ana Ekran Aktif Karakter Canvası (Canlı & Sağa Bakan)
-            const apc = document.getElementById('active-pet-canvas');
-            if (apc) {
-                const actx = apc.getContext('2d');
-                actx.clearRect(0, 0, 86, 86);
-                drawExactInGamePlayer(actx, 38, 54, _currentSkin, _equippedWeapon, _animFrame, 0.44);
-            }
-
-            // 2. Cosmetics (Envanter) Önizleme Canvası (Canlı)
-            const cpc = document.getElementById('cosmetic-preview-canvas');
-            if (cpc) {
-                const cctx = cpc.getContext('2d');
-                cctx.clearRect(0, 0, 200, 200);
-                const prevSkin = (_cosmeticPreviewItem && _cosmeticPreviewItem.cat === 'deriler') ? _cosmeticPreviewItem.item.id : _currentSkin;
-                const prevWep = (_cosmeticPreviewItem && (_cosmeticPreviewItem.cat === 'baltalar' || _cosmeticPreviewItem.cat === 'kiliclar')) ? _cosmeticPreviewItem.item.id : _equippedWeapon;
-                drawExactInGamePlayer(cctx, 95, 125, prevSkin, prevWep, _animFrame, 0.74);
-            }
-
-            // 3. Shop (Mağaza) Önizleme Canvası (Canlı)
-            const spc = document.getElementById('shop-preview-canvas');
-            if (spc) {
-                const sctx = spc.getContext('2d');
-                sctx.clearRect(0, 0, 200, 200);
-                if (_shopPreviewItem && _shopPreviewItem.cat === 'chests') {
-                    drawChestIcon(sctx, 100, 100, _shopPreviewItem.item.rarity, 1.5, _animFrame);
-                } else {
-                const prevSkin = (_shopPreviewItem && _shopPreviewItem.cat === 'deriler') ? _shopPreviewItem.item.id : _currentSkin;
-                const prevWep = (_shopPreviewItem && (_shopPreviewItem.cat === 'baltalar' || _shopPreviewItem.cat === 'kiliclar')) ? _shopPreviewItem.item.id : _equippedWeapon;
-                drawExactInGamePlayer(sctx, 95, 125, prevSkin, prevWep, _animFrame, 0.74);
-                }
             }
 
             requestAnimationFrame(animateMenu);
