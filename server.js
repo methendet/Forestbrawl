@@ -67,10 +67,10 @@ setInterval(() => {
   }
 }, 15 * 60 * 1000).unref();
 const MOB_TYPES = [
-  { shape: 'wolf', color: '#6b4932', outline: '#28170d', eyes: '#ffcc66', typeName: '🐺 Kurt', radius: 46, hp: 300, dmg: 28, speed: 18, wanderSpeed: 10, xpReward: 80, goldReward: 35 },
-  { shape: 'scorpion', color: '#4a2818', outline: '#1a0d06', eyes: '#ff4400', typeName: '🦂 Akrep', radius: 52, hp: 520, dmg: 46, speed: 15, wanderSpeed: 9, xpReward: 150, goldReward: 65 },
-  { shape: 'bear', color: '#4a2f1b', outline: '#1a1008', eyes: '#ffaa00', typeName: '🐻 Ayı', radius: 65, hp: 950, dmg: 72, speed: 14, wanderSpeed: 8, xpReward: 320, goldReward: 140 },
-  { shape: 'spider', color: '#2a1a38', outline: '#0f0814', eyes: '#ff1100', typeName: '🕷️ Örümcek', radius: 48, hp: 380, dmg: 34, speed: 17, wanderSpeed: 9, xpReward: 100, goldReward: 45 },
+  { shape: 'wolf', color: '#6b4932', outline: '#28170d', eyes: '#ffcc66', typeName: '🐺 Kurt', radius: 46, hp: 300, dmg: 28, speed: 18, wanderSpeed: 10, xpReward: 80, goldReward: 8 },
+  { shape: 'scorpion', color: '#4a2818', outline: '#1a0d06', eyes: '#ff4400', typeName: '🦂 Akrep', radius: 52, hp: 520, dmg: 46, speed: 15, wanderSpeed: 9, xpReward: 150, goldReward: 15 },
+  { shape: 'bear', color: '#4a2f1b', outline: '#1a1008', eyes: '#ffaa00', typeName: '🐻 Ayı', radius: 65, hp: 950, dmg: 72, speed: 14, wanderSpeed: 8, xpReward: 320, goldReward: 30 },
+  { shape: 'spider', color: '#2a1a38', outline: '#0f0814', eyes: '#ff1100', typeName: '🕷️ Örümcek', radius: 48, hp: 380, dmg: 34, speed: 17, wanderSpeed: 9, xpReward: 100, goldReward: 12 },
 ];
 const legacyDataFile = process.env.DATA_FILE || path.join(__dirname, 'forest-data.json');
 const databaseFile = process.env.DATABASE_FILE || path.join(__dirname, 'forestbrawl.db');
@@ -919,6 +919,8 @@ const io = new Server(server, {
 function compactState(state, full = false) {
   const score = Number(state.score ?? state.sc ?? 0) || 0;
   const res = {
+    n: state.name || 'Oyuncu',
+    sk: state.skin || 'default',
     x: Math.round((state.x || 0) * 10) / 10, y: Math.round((state.y || 0) * 10) / 10,
     a: state.angle !== undefined ? Math.round(state.angle * 100) / 100 : 0, hp: state.hp ?? 100, mhp: state.maxHp ?? 100, w: state.weapon || 1,
     atk: Boolean(state.isAttacking), atp: Number(state.attackTimer) || 0, atd: Number(state.attackDuration) || 0, k: state.kills || 0, xp: state.xp || 0, g: state.gold || 0,
@@ -929,8 +931,6 @@ function compactState(state, full = false) {
     trappedBy: state.trappedBy || null, trappedX: state.trappedX ?? null, trappedY: state.trappedY ?? null,
   };
   if (full) {
-    res.n = state.name || 'Oyuncu';
-    res.sk = state.skin || 'default';
     res.color = state.color || '#8B5E3A';
     res.team = state.team || '';
     res.clanId = state.clanId || '';
@@ -1281,7 +1281,7 @@ function releaseTrapVictim(playerId, trapId = null) {
   target.trappedUntil = 0;
   target.vx = 0;
   target.vy = 0;
-  io.to(playerId).emit('trap_freed', { buildingId: activeTrapId });
+  io.emit('trap_freed', { buildingId: activeTrapId, victimId: playerId });
   if (ownerId) {
     io.to(ownerId).emit('trap_victim_freed', { victimId: playerId, buildingId: activeTrapId });
   }
@@ -1631,7 +1631,7 @@ io.on('connection', (socket) => {
       wood: 50,
       stone: 30,
       apples: 5,
-      gold: authUser ? Math.max(0, Number(authUser.gold || authUser.coins || 0)) : 0,
+      gold: 0,
       kills: 0,
       lastSwingAt: 0,
       lastArrowAt: 0,
@@ -1816,15 +1816,12 @@ io.on('connection', (socket) => {
       if (b && (b.hp ?? 100) > 0 && Date.now() < (player.trappedUntil || 0)) {
         data.vx = 0;
         data.vy = 0;
-        data.x = player.trappedX ?? data.x;
-        data.y = player.trappedY ?? data.y;
-        acceptedX = Number(data.x) || prevX;
-        acceptedY = Number(data.y) || prevY;
+        data.x = player.trappedX ?? b.x;
+        data.y = player.trappedY ?? b.y;
+        acceptedX = data.x;
+        acceptedY = data.y;
       } else {
-        player.trappedBy = null;
-        player.trappedX = null;
-        player.trappedY = null;
-        player.trappedUntil = 0;
+        releaseTrapVictim(socket.id, player.trappedBy);
       }
     }
     for (const key of ['x', 'y', 'angle', 'vx', 'vy', 'isAttacking', 'attackTimer', 'attackDuration', 'weapon', 'axeTier', 'swordTier', 'team', 'color', 'skin', 'acc', 'buildX', 'buildY']) {
@@ -1881,6 +1878,18 @@ io.on('connection', (socket) => {
     if (!Number.isFinite(angle)) return;
     const attackerX = Number(attacker.x) || 0, attackerY = Number(attacker.y) || 0;
     attacker.angle = angle;
+    attacker.weapon = weapon;
+    attacker.isAttacking = true;
+    attacker.attackTimer = 1;
+    attacker.attackDuration = weapon === 2 ? 14 : 18;
+
+    relayToOthers(socket, 'remote_swing', {
+      id: socket.id,
+      weapon,
+      axeTier: data.axeTier,
+      swordTier: data.swordTier,
+      angle
+    });
 
     // Lag compensation: rewind target positions to attacker's perspective (~40-100ms in past)
     const clientRewindTime = now - Math.min(250, Math.max(25, Number(data.ping || attacker.ping || 60)));
@@ -1904,7 +1913,7 @@ io.on('connection', (socket) => {
         target.kills = target.kills || 0;
         attacker.kills = (attacker.kills || 0) + 1;
         attacker.score = (attacker.score || 0) + 150;
-        attacker.gold = (attacker.gold || 0) + 50;
+        attacker.gold = (attacker.gold || 0) + 15;
         if (BOUNTY_EVENT_ENABLED && currentBountyId && targetId === currentBountyId) {
           const bountyBonus = 300;
           attacker.gold = (attacker.gold || 0) + bountyBonus;
@@ -1946,7 +1955,7 @@ io.on('connection', (socket) => {
       target.kills = target.kills || 0;
       attacker.kills = (attacker.kills || 0) + 1;
       attacker.score = (attacker.score || 0) + 150;
-      attacker.gold = (attacker.gold || 0) + 50;
+      attacker.gold = (attacker.gold || 0) + 15;
       if (BOUNTY_EVENT_ENABLED && currentBountyId && data.targetId === currentBountyId) {
         const bountyBonus = 300;
         attacker.gold = (attacker.gold || 0) + bountyBonus;
@@ -1991,7 +2000,7 @@ io.on('connection', (socket) => {
       target.kills = target.kills || 0;
       owner.kills = (owner.kills || 0) + 1;
       owner.score = (owner.score || 0) + 150;
-      owner.gold = (owner.gold || 0) + 50;
+      owner.gold = (owner.gold || 0) + 15;
       if (BOUNTY_EVENT_ENABLED && currentBountyId && data.targetId === currentBountyId) {
         const bountyBonus = 300;
         owner.gold = (owner.gold || 0) + bountyBonus;
@@ -2048,13 +2057,15 @@ io.on('connection', (socket) => {
     const triggerRadius = (Number(building.radius) || 78) + 35;
     if (dx * dx + dy * dy > triggerRadius * triggerRadius) return;
     target.trappedBy = building.id;
-    target.trappedX = target.x;
-    target.trappedY = target.y;
+    target.trappedX = building.x;
+    target.trappedY = building.y;
+    target.x = building.x;
+    target.y = building.y;
     target.trappedUntil = Date.now() + 4000;
     target.vx = 0;
     target.vy = 0;
-    io.to(data.victimId).emit('trap_caught', { buildingId: building.id, x: target.trappedX, y: target.trappedY });
-    io.emit('trap_triggered', { buildingId: building.id, victimId: data.victimId, x: target.x, y: target.y });
+    io.to(data.victimId).emit('trap_caught', { buildingId: building.id, x: building.x, y: building.y });
+    io.emit('trap_triggered', { buildingId: building.id, victimId: data.victimId, x: building.x, y: building.y });
   });
 
   socket.on('mob_trap_hit', (data = {}) => {
@@ -2128,11 +2139,12 @@ io.on('connection', (socket) => {
     resState.hp = Math.max(0, resState.hp - hitDmg);
 
     const resYield = Math.max(1, Math.round(5 * (1 + tier * 0.5)));
+    const goldYield = Math.max(1, Math.round(2 * (1 + tier * 0.3)));
     if (resDef.type === 'wood') player.wood = (player.wood || 0) + resYield;
     else if (resDef.type === 'stone') player.stone = (player.stone || 0) + resYield;
-    else if (resDef.type === 'gold') player.gold = (player.gold || 0) + resYield;
+    else if (resDef.type === 'gold') player.gold = (player.gold || 0) + goldYield;
     else if (resDef.type === 'apple') player.apples = (player.apples || 0) + Math.max(1, Math.round(resYield * 0.4));
-    player.score = (player.score || 0) + resYield * 2;
+    player.score = (player.score || 0) + (resDef.type === 'gold' ? goldYield * 3 : resYield * 2);
 
     if (resState.hp <= 0) {
       resState.deadUntil = now + 25000;

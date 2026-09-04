@@ -1,4 +1,4 @@
-﻿function drawSkinEyesOverlay(c, R, sk, fl) {
+function drawSkinEyesOverlay(c, R, sk, fl) {
   if(sk&&sk.startsWith('kiz_'))return;
   c.save();
   const ex = R * 0.22;
@@ -221,8 +221,12 @@ function _mobSprite(shape, radius) {
   return nearest;
 }
 function _playerSprite(skin) {
+  if (!skin) skin = 'default';
   const key = `players/${skin}.png`;
-  const entry = _PLAYER_SPRITES.get(key);
+  let entry = _PLAYER_SPRITES.get(key);
+  if (!entry) {
+    entry = _loadSprite(key, 'player', 'normal');
+  }
   return entry && entry.ready ? entry.image : null;
 }
 function _resourceSprite(type, biome) {
@@ -2510,10 +2514,10 @@ const ENEMY_TYPES = [
 ];
 
 const ACTIVE_ENEMY_TYPES = [
-  { name:'Kurt', biome:'forest', shape:'wolf', radius:38, hp:90, maxHp:90, color:'#6b4932', outline:'#28170d', dmg:20, speed:0.84, xp:35, gold:15, eyes:'#ffcc66', typeName:'🐺 Kurt' },
-  { name:'Akrep', biome:'forest', shape:'scorpion', radius:42, hp:130, maxHp:130, color:'#4a2818', outline:'#1a0d06', dmg:28, speed:0.65, xp:45, gold:20, eyes:'#ff4400', typeName:'🦂 Akrep' },
-  { name:'Ayı', biome:'forest', shape:'bear', radius:50, hp:260, maxHp:260, color:'#4a2f1b', outline:'#1a1008', dmg:38, speed:0.55, xp:75, gold:35, eyes:'#ffaa00', typeName:'🐻 Ayı' },
-  { name:'Örümcek', biome:'forest', shape:'spider', radius:40, hp:110, maxHp:110, color:'#2a1a38', outline:'#0f0814', dmg:24, speed:0.75, xp:40, gold:18, eyes:'#ff1100', typeName:'🕷️ Örümcek' },
+  { name:'Kurt', biome:'forest', shape:'wolf', radius:38, hp:90, maxHp:90, color:'#6b4932', outline:'#28170d', dmg:20, speed:0.84, xp:35, gold:6, eyes:'#ffcc66', typeName:'🐺 Kurt' },
+  { name:'Akrep', biome:'forest', shape:'scorpion', radius:42, hp:130, maxHp:130, color:'#4a2818', outline:'#1a0d06', dmg:28, speed:0.65, xp:45, gold:10, eyes:'#ff4400', typeName:'🦂 Akrep' },
+  { name:'Ayı', biome:'forest', shape:'bear', radius:50, hp:260, maxHp:260, color:'#4a2f1b', outline:'#1a1008', dmg:38, speed:0.55, xp:75, gold:20, eyes:'#ffaa00', typeName:'🐻 Ayı' },
+  { name:'Örümcek', biome:'forest', shape:'spider', radius:40, hp:110, maxHp:110, color:'#2a1a38', outline:'#0f0814', dmg:24, speed:0.75, xp:40, gold:8, eyes:'#ff1100', typeName:'🕷️ Örümcek' },
 ];
 const ACTIVE_MOB_SHAPES = new Set(['wolf', 'kurt', 'scorpion', 'akrep', 'bear', 'ayi', 'spider', 'orumcek', 'örümcek']);
 function isActiveMobShape(shape) {
@@ -3079,7 +3083,7 @@ const player = {
   x: _spawn.x, y: _spawn.y, radius: 35, color: playerColor,
   angle: 0, vx: 0, vy: 0, momX: 0, momY: 0,
   weapon: 1,
-  wood: 50, stone: 30, gold: 100, apples: 5,
+  wood: 50, stone: 30, gold: 0, apples: 5,
   hp: 250, maxHp: 250, xp: 0,
   _fruitUseUntil: 0,
   isAttacking: false, attackTimer: 0,
@@ -3103,21 +3107,21 @@ const RES_DEFS_BY_BIOME = {
     { type:'wood',  w:16, radius:219, hp:750,  yW:18, yS:0, yG:0, yA:0.25 },
     { type:'stone', w:20, radius:120, hp:650,  yW:0,  yS:10, yG:0, yA:0 },
     { type:'stone', w:10, radius:150, hp:950,  yW:0,  yS:18, yG:0, yA:0 },
-    { type:'gold',  w:5,  radius:115, hp:500,  yW:0,  yS:3,  yG:9, yA:0 },
-    { type:'gold',  w:3,  radius:140, hp:700,  yW:0,  yS:4,  yG:16, yA:0 },
+    { type:'gold',  w:5,  radius:115, hp:500,  yW:0,  yS:3,  yG:3, yA:0 },
+    { type:'gold',  w:3,  radius:140, hp:700,  yW:0,  yS:4,  yG:5, yA:0 },
     { type:'apple',    w:10, radius:133, hp:380,  yW:6,  yS:0,  yG:0, yA:1.5 },
     { type:'bush',     w:14, radius:83,  hp:240,  yW:4,  yS:0,  yG:0, yA:0.8 },
-    { type:'mushroom', w:8,  radius:65,  hp:180,  yW:0,  yS:0,  yG:2, yA:0, yHp:45 },
+    { type:'mushroom', w:8,  radius:65,  hp:180,  yW:0,  yS:0,  yG:0, yA:0, yHp:45 },
     { type:'crystal',  w:4,  radius:85,  hp:300,  yW:0,  yS:0,  yG:0, yA:0, yXp:55 },
-    { type:'hive',     w:3,  radius:75,  hp:260,  yW:0,  yS:0,  yG:6, yA:0, ySpd:180 },
+    { type:'hive',     w:3,  radius:75,  hp:260,  yW:0,  yS:0,  yG:1, yA:0, ySpd:180 },
   ],
   winter: [
     { type:'wood',  w:26, radius:167, hp:500,  yW:9,  yS:0, yG:0, yA:0.20 },
     { type:'wood',  w:13, radius:207, hp:680,  yW:14, yS:0, yG:0, yA:0.14 },
     { type:'stone', w:24, radius:123, hp:750,  yW:0,  yS:12, yG:0, yA:0 },
     { type:'stone', w:12, radius:153, hp:1050, yW:0,  yS:20, yG:0, yA:0 },
-    { type:'gold',  w:6,  radius:118, hp:540,  yW:0,  yS:3,  yG:11, yA:0 },
-    { type:'gold',  w:3,  radius:143, hp:740,  yW:0,  yS:4,  yG:18, yA:0 },
+    { type:'gold',  w:6,  radius:118, hp:540,  yW:0,  yS:3,  yG:3, yA:0 },
+    { type:'gold',  w:3,  radius:143, hp:740,  yW:0,  yS:4,  yG:5, yA:0 },
     { type:'crystal', w:5, radius:85, hp:300,  yW:0,  yS:0,  yG:0, yA:0, yXp:55 },
     { type:'bush',  w:8,  radius:78,  hp:220,  yW:2,  yS:0,  yG:0, yA:0.5 },
   ],
@@ -3126,8 +3130,8 @@ const RES_DEFS_BY_BIOME = {
     { type:'wood',  w:9,  radius:199, hp:640,  yW:12, yS:0, yG:0, yA:0.09 },
     { type:'stone', w:28, radius:125, hp:700,  yW:0,  yS:12, yG:0, yA:0 },
     { type:'stone', w:14, radius:155, hp:1000, yW:0,  yS:20, yG:0, yA:0 },
-    { type:'gold',  w:8,  radius:123, hp:520,  yW:0,  yS:3,  yG:12, yA:0 },
-    { type:'gold',  w:4,  radius:145, hp:720,  yW:0,  yS:4,  yG:19, yA:0 },
+    { type:'gold',  w:8,  radius:123, hp:520,  yW:0,  yS:3,  yG:3, yA:0 },
+    { type:'gold',  w:4,  radius:145, hp:720,  yW:0,  yS:4,  yG:5, yA:0 },
     { type:'bush',  w:10, radius:75,  hp:200,  yW:2,  yS:0,  yG:0, yA:0.35 },
   ],
   lava: [
@@ -3135,8 +3139,8 @@ const RES_DEFS_BY_BIOME = {
     { type:'wood',  w:14, radius:224, hp:840,  yW:20, yS:0, yG:0, yA:0.12 },
     { type:'stone', w:20, radius:123, hp:800,  yW:0,  yS:14, yG:0, yA:0 },
     { type:'stone', w:10, radius:153, hp:1120, yW:0,  yS:22, yG:0, yA:0 },
-    { type:'gold',  w:6,  radius:118, hp:540,  yW:0,  yS:4,  yG:12, yA:0 },
-    { type:'gold',  w:3,  radius:143, hp:780,  yW:0,  yS:5,  yG:20, yA:0 },
+    { type:'gold',  w:6,  radius:118, hp:540,  yW:0,  yS:4,  yG:3, yA:0 },
+    { type:'gold',  w:3,  radius:143, hp:780,  yW:0,  yS:5,  yG:6, yA:0 },
     { type:'bush',  w:12, radius:85,  hp:250,  yW:4,  yS:0,  yG:0, yA:0.7 },
   ],
 };
@@ -4302,18 +4306,18 @@ function formatScore(score) {
   return String(Math.floor(value));
 }
 function updateLeaderboard() {
-  const playerScore = player.score || 0;
-  const all = [{ name: player.name || 'Sen', score: playerScore, kills: player.kills, isMe: true }];
+  const playerGold = player.gold || 0;
+  const all = [{ name: player.name || 'Sen', gold: playerGold, kills: player.kills, isMe: true }];
   if (typeof _otherPlayers !== 'undefined') {
     _otherPlayers.forEach((p) => {
       if (!p || !p.name) return;
-      all.push({ name: p.name, score: p.score || 0, kills: p.kills||0, isMe: false });
+      all.push({ name: p.name, gold: (typeof p.gold === 'number' ? p.gold : (p.score || 0)), kills: p.kills || 0, isMe: false });
     });
   }
-  all.sort((a, b) => b.score - a.score);
+  all.sort((a, b) => b.gold - a.gold);
   const top10 = all.slice(0, 10);
   const newHtml = top10.map(e => {
-    const pts = formatScore(e.score);
+    const pts = formatScore(e.gold);
     return `<div class="lb-row${e.isMe ? ' me' : ''}">
       <span class="lb-name">${e.name}</span>
       <span class="lb-score"><img class="lb-gold-icon" src="asset/gold.png" alt="Altın">${pts}</span>
@@ -6141,10 +6145,12 @@ function die() {
   const _dieAuthTok = localStorage.getItem('fb_auth_token') || '';
   const _dieTimePlayed = Math.floor(globalTime / 60); // seconds alive this session
   const _xpEarned = player.kills * 60 + _dieTimePlayed * 2 + (score > 0 ? Math.floor(Math.sqrt(score) * 8) : 0);
+  const _earnedGold = Math.floor((player.gold || 0) / 10);
   
   localStorage.setItem('fb_total_xp',   parseInt(localStorage.getItem('fb_total_xp')||'0',10)   + Math.min(_xpEarned, 10000));
   localStorage.setItem('fb_total_time', parseInt(localStorage.getItem('fb_total_time')||'0',10) + _dieTimePlayed);
-  localStorage.setItem('fb_total_gold', parseInt(localStorage.getItem('fb_total_gold')||'0',10) + player.gold);
+  localStorage.setItem('fb_total_gold', parseInt(localStorage.getItem('fb_total_gold')||'0',10) + _earnedGold);
+  localStorage.setItem('fb_gold', prevShopGold + _earnedGold);
   localStorage.setItem('fb_total_kills', parseInt(localStorage.getItem('fb_total_kills')||'0',10) + player.kills);
   localStorage.setItem('fb_total_deaths', parseInt(localStorage.getItem('fb_total_deaths')||'0',10) + 1);
   if (score > parseInt(localStorage.getItem('fb_best_score')||'0', 10)) {
@@ -6163,8 +6169,8 @@ function die() {
       deaths: 1,
       score,
       timePlayed: _dieTimePlayed,
-      coins: player.gold,
-      gold: player.gold,
+      coins: _earnedGold,
+      gold: _earnedGold,
       questProgress: {
         wolves: Math.max(0, (_sessionQuestStats.wolves || 0) - (_questPersisted.wolves || 0)),
         bears: Math.max(0, (_sessionQuestStats.bears || 0) - (_questPersisted.bears || 0)),
@@ -6213,7 +6219,7 @@ function die() {
   const isNew = score > prev;
   const timeStr = _fmtTime(globalTime);
   const age = getAge(player.xp);
-  const newTotalGold = prevShopGold + player.gold;
+  const newTotalGold = prevShopGold + _earnedGold;
 
   // Killer info banner
   const killerEl = document.getElementById('death-killer');
@@ -6241,14 +6247,14 @@ function die() {
   if (_dsAge) _dsAge.textContent = age;
   if (_dsTime) _dsTime.textContent = timeStr;
   if (_dsDmg) _dsDmg.textContent = player.totalDmg || 0;
-  if (_dsGold) _dsGold.textContent = '+' + player.gold;
+  if (_dsGold) _dsGold.textContent = '+' + _earnedGold;
   // New record banner
   const _recEl = document.getElementById('death-new-record');
   if (_recEl) _recEl.style.display = isNew ? '' : 'none';
   // Gold earned toast in old #death-stats (hidden by default, only show for big gold)
-  if (player.gold > 50) {
+  if (_earnedGold > 0) {
     const _ds = document.getElementById('death-stats');
-    if (_ds) { _ds.style.display = ''; _ds.innerHTML = `<div style="background:rgba(245,200,66,0.15);border:1.5px solid rgba(245,200,66,0.35);border-radius:10px;padding:7px 14px;color:#ffd700;font-size:clamp(11px,3.2vw,14px);font-weight:800;line-height:1.5;word-break:break-word;">💰 +${player.gold} Altın kazandın!<br><span style="font-size:0.9em;opacity:0.85;">Toplam: ${newTotalGold.toLocaleString('tr-TR')}</span></div>`; }
+    if (_ds) { _ds.style.display = ''; _ds.innerHTML = `<div style="background:rgba(245,200,66,0.15);border:1.5px solid rgba(245,200,66,0.35);border-radius:10px;padding:7px 14px;color:#ffd700;font-size:clamp(11px,3.2vw,14px);font-weight:800;line-height:1.5;word-break:break-word;">💰 +${_earnedGold} Altın profiline eklendi!<br><span style="font-size:0.9em;opacity:0.85;">Toplam: ${newTotalGold.toLocaleString('tr-TR')}</span></div>`; }
   }
   document.getElementById('death-overlay').classList.add('show');
   // Update quest progress for time survived
@@ -6260,8 +6266,8 @@ function die() {
   // Rank progress bar — show immediately with session XP & lifetime progress
   (function(){
     const _sessXP = Math.min(player.kills * 75 + Math.floor(globalTime / 60) * 10 + Math.floor((player.totalDmg||0) / 15) + Math.floor((score || 0) / 10), 5000);
-    const _earnedXpEl = document.getElementById('death-xp-earned');
-    if (_earnedXpEl) _earnedXpEl.textContent = '+' + _sessXP.toLocaleString('tr-TR') + ' XP';
+    const _earnedGoldEl = document.getElementById('death-xp-earned');
+    if (_earnedGoldEl) _earnedGoldEl.textContent = '+' + _earnedGold.toLocaleString('tr-TR') + ' Altın';
     const _prevTotalXp = parseInt(localStorage.getItem('fb_user_xp') || localStorage.getItem('fb_total_xp') || '0', 10);
     const _newTotalXp = _prevTotalXp + _sessXP;
     localStorage.setItem('fb_user_xp', _newTotalXp);
@@ -6286,9 +6292,9 @@ function die() {
 
     _renderDeathRankVisuals(_rid, Math.min(_rid + 1, 11));
     if (_rid >= 11) {
-      _rtEl.innerHTML = `<b>+${_sessXP.toLocaleString('tr-TR')} XP</b> kazandın! (${_newTotalXp.toLocaleString('tr-TR')} XP · MAKSİMUM SEVİYE 👑)`;
+      _rtEl.innerHTML = `<b>+${_sessXP.toLocaleString('tr-TR')} XP</b> kazandın! (${_newTotalXp.toLocaleString('tr-TR')} XP · MAKSİMUM RANK 👑)`;
     } else {
-      _rtEl.innerHTML = `<b>+${_sessXP.toLocaleString('tr-TR')} XP</b> kazandın! (${_newTotalXp.toLocaleString('tr-TR')} / ${_re.toLocaleString('tr-TR')} XP · %${_pct})<br><span style="font-size:10px;color:#79D138;font-weight:800;">Sonraki Seviye için: ${_needed.toLocaleString('tr-TR')} XP kaldı</span>`;
+      _rtEl.innerHTML = `<b>+${_sessXP.toLocaleString('tr-TR')} XP</b> kazandın! (${_newTotalXp.toLocaleString('tr-TR')} / ${_re.toLocaleString('tr-TR')} XP · %${_pct})<br><span style="font-size:10px;color:#79D138;font-weight:800;">Sonraki Rank (${_nm[5]}) için: ${_needed.toLocaleString('tr-TR')} XP kaldı</span>`;
     }
     _rbEl.style.display = '';
     _rfEl.style.width = '0%';
@@ -9913,13 +9919,12 @@ function _interpOtherPlayers() {
   const renderTime = wallNow - 65; // 65ms render delay buffer
 
   _otherPlayers.forEach((p) => {
-    // If trapped by a trap building, freeze in place — zero drift, no teleport to center
+    // If trapped by a trap building, lock to trap center
     if (p._trappedBy) {
       const _trb = _buildingsMap.get(p._trappedBy) || buildings.find(b => (b._netId === p._trappedBy || b.id === p._trappedBy || b._bLid === p._trappedBy));
       if (_trb && _trb.hp > 0) {
-        if (p._trappedX === undefined) { p._trappedX = p.x; p._trappedY = p.y; }
-        p.x = p._trappedX;
-        p.y = p._trappedY;
+        p.x = _trb.x;
+        p.y = _trb.y;
         p.vx = 0;
         p.vy = 0;
         return;
@@ -10004,6 +10009,16 @@ function _interpOtherPlayers() {
       while (da > Math.PI) da -= Math.PI * 2;
       while (da < -Math.PI) da += Math.PI * 2;
       p.angle = (p.angle || 0) + da * (1 - Math.exp(-24 * dt));
+    }
+
+    // 60 FPS local attackTimer advancement for smooth weapon & arm swing animation
+    if (p.isAttacking) {
+      const dur = p.attackDuration || (p.weapon === 2 ? 14 : 18);
+      p.attackTimer = (p.attackTimer || 0) + 1;
+      if (p.attackTimer >= dur) {
+        p.isAttacking = false;
+        p.attackTimer = 0;
+      }
     }
   });
 }
@@ -10492,10 +10507,10 @@ function update(timestamp = 0) {
     const dx = player.x - b.x, dy = player.y - b.y;
     const distSq = dx * dx + dy * dy;
 
-    if (b.type === 4 && b.life % 60 === 0 && (b._ownerId === _mySocketId || (!b._ownerId && !b._remote))) {
+    if (b.type === 4 && b.life % 180 === 0 && (b._ownerId === _mySocketId || (!b._ownerId && !b._remote))) {
       const _wTier = _getTier(b);
-      const _wGold  = [1,2,3,5,8,12][_wTier] || 1;
-      const _wScore = [10,22,50,110,220,500][_wTier] || 10;
+      const _wGold  = [1,1,2,3,4,6][_wTier] || 1;
+      const _wScore = [10,20,40,80,150,300][_wTier] || 10;
       player.gold += _wGold; player.score = (player.score||0) + _wScore; updateUI();
     }
     if (b.type === 5) {
@@ -12596,8 +12611,8 @@ function initMultiplayer() {
         if (s.atd  !== undefined) existing.attackDuration = s.atd;
         if (s.k    !== undefined) existing.kills       = s.k;
         if (s.xp   !== undefined) existing.xp          = s.xp;
-        if (s.sk   !== undefined) existing.skin        = s.sk;
-        if (s.n    !== undefined) existing.name        = s.n;
+        if (s.sk) existing.skin = s.sk;
+        if (s.n) existing.name = s.n;
         if (s.at   !== undefined) existing.axeTier     = s.at;
         if (s.st   !== undefined) existing.swordTier   = s.st;
         if (s.rk   !== undefined) existing.rankId      = s.rk;
@@ -12608,17 +12623,19 @@ function initMultiplayer() {
         if (s.clanId !== undefined) existing.clanId     = s.clanId;
         if (s.clanTag !== undefined) existing.clanTag    = s.clanTag;
         if (s.acc  !== undefined) existing.acc         = s.acc;
+        if (s.trappedBy !== undefined) existing._trappedBy = s.trappedBy;
         // Build preview position (null when not in build mode)
         existing.buildX = (typeof s.bx === 'number') ? s.bx : null;
         existing.buildY = (typeof s.by === 'number') ? s.by : null;
       } else {
         // First time seeing this player via broadcast — init render pos immediately
         const p = {
-          name: s.n, skin: s.sk, x: sx, y: sy, angle: sa,
+          name: s.n || 'Oyuncu', skin: s.sk || 'default', x: sx, y: sy, angle: sa,
           hp: s.hp, maxHp: s.mhp, weapon: s.w, isAttacking: s.atk, attackTimer: s.atp || 0, attackDuration: s.atd || 0,
           kills: s.k, xp: s.xp, gold: s.g || 0, score: s.sc || 0, axeTier: s.at || 0, swordTier: s.st || 0,
           rankId: s.rk ?? 0, clanId: s.clanId || '', clanTag: s.clanTag || '',
           acc: s.acc || {},
+          _trappedBy: s.trappedBy || null,
           buildX: (typeof s.bx === 'number') ? s.bx : null,
           buildY: (typeof s.by === 'number') ? s.by : null,
           _targetX: sx, _targetY: sy, _targetAngle: sa, vx: svx, vy: svy, _lastPacketTime: now,
@@ -13111,8 +13128,10 @@ function initMultiplayer() {
       const victim = _otherPlayers.get(victimId);
       if (victim && b) {
         victim._trappedBy = bNetId;
-        victim._trappedX = victim.x;
-        victim._trappedY = victim.y;
+        victim._trappedX = b.x;
+        victim._trappedY = b.y;
+        victim.x = b.x;
+        victim.y = b.y;
         victim.vx = 0;
         victim.vy = 0;
       }
@@ -13122,6 +13141,23 @@ function initMultiplayer() {
       const a = Math.random() * Math.PI * 2;
       particles.push({ x: bx, y: by, vx: Math.cos(a)*5, vy: Math.sin(a)*5-2,
         r: 3+Math.random()*3, life: 20+Math.random()*12, maxLife: 32, color: '#cc88ff' });
+    }
+  });
+
+  // Remote swing event from server — instant 60 FPS attack animation
+  _socket.on('remote_swing', ({ id, weapon, axeTier, swordTier, angle }) => {
+    const other = _otherPlayers.get(id);
+    if (other) {
+      other.weapon = weapon || other.weapon || 1;
+      if (axeTier !== undefined) other.axeTier = axeTier;
+      if (swordTier !== undefined) other.swordTier = swordTier;
+      if (typeof angle === 'number') {
+        other.angle = angle;
+        other._targetAngle = angle;
+      }
+      other.isAttacking = true;
+      other.attackTimer = 1;
+      other.attackDuration = other.weapon === 2 ? 14 : 18;
     }
   });
 
@@ -13143,13 +13179,16 @@ function initMultiplayer() {
   // Trap caught — server froze us in a trap
   _socket.on('trap_caught', ({ buildingId, x, y }) => {
     if (!player || player.dead) return;
+    const b = _buildingsMap.get(buildingId) || buildings.find(x => (x._netId === buildingId || x.id === buildingId));
+    const snapX = b ? b.x : (Number.isFinite(Number(x)) ? Number(x) : player.x);
+    const snapY = b ? b.y : (Number.isFinite(Number(y)) ? Number(y) : player.y);
     _trapPendingId = null;
     _trapPendingUntil = 0;
     _trapCaughtBy = buildingId;
-    _trapCaughtX = Number.isFinite(Number(x)) ? Number(x) : player.x;
-    _trapCaughtY = Number.isFinite(Number(y)) ? Number(y) : player.y;
-    player.x = _trapCaughtX;
-    player.y = _trapCaughtY;
+    _trapCaughtX = snapX;
+    _trapCaughtY = snapY;
+    player.x = snapX;
+    player.y = snapY;
     player.vx = 0; player.vy = 0; player.momX = 0; player.momY = 0;
     playSound(180, 0.18, 'sawtooth', 0.35);
   });
@@ -13873,10 +13912,9 @@ function drawOtherPlayers() {
       // ── Weapon + arms — identical style to local player ──────────────────
       {
         let swAng = 0;
-        if (p.isAttacking) {
-          const packetAgeMs = Math.max(0, Date.now() - (p._lastPacketTime || Date.now()));
-          const attackBoost = Math.min(0.32, packetAgeMs / 1200);
-          const prog = p.attackDuration > 0 ? Math.max(0, Math.min(1, (p.attackTimer || 0) + attackBoost)) : 0;
+        if (p.isAttacking && p.attackTimer > 0) {
+          const dur = p.attackDuration || (p.weapon === 2 ? 14 : 18);
+          const prog = Math.max(0, Math.min(1, p.attackTimer / dur));
           if (p.weapon >= 3) {
             swAng = Math.sin(prog * Math.PI) * 0.2;
           } else {
@@ -14019,55 +14057,6 @@ function drawOtherPlayers() {
         ctx.fillStyle = '#222';
         ctx.fillText(p._chatMsg.length > 28 ? p._chatMsg.slice(0,27)+'…' : p._chatMsg, cmx, cmy - 2);
         ctx.globalAlpha = 1;
-      }
-
-      // Attack arc — live feedback, no sluggish yellow glow on remote sword swings
-      if (p.isAttacking && (p.weapon === 1 || p.weapon === 2)) {
-        const packetAgeMs = Math.max(0, Date.now() - (p._lastPacketTime || Date.now()));
-        const attackBoost = Math.min(0.35, packetAgeMs / 900);
-        const arcA = Math.PI / 3.0;
-        const hitR = p.weapon === 2 ? 132 : 115;
-        const attackProgress = p.attackDuration > 0 ? Math.max(0, Math.min(1, (p.attackTimer || 0) + attackBoost)) : 0;
-        const swingOffset = Math.sin(attackProgress * Math.PI) * arcA * 0.75;
-        const swingPeak = Math.abs(Math.sin(attackProgress * Math.PI));
-
-        ctx.save();
-        ctx.translate(p.x, p.y);
-
-        const trailCount = _qualityLevel === 0 ? 2 : _qualityLevel === 1 ? 3 : 4;
-        for (let ti = trailCount; ti >= 1; ti--) {
-          const tOffset = Math.sin(attackProgress * Math.PI - ti * 0.16) * arcA * 0.65;
-          const tA = arcA * (0.35 + ti * 0.08);
-          const tAlpha = (trailCount - ti + 1) / trailCount * swingPeak * 0.12;
-          if (tAlpha <= 0.005) continue;
-          ctx.beginPath(); ctx.moveTo(0, 0);
-          ctx.arc(0, 0, hitR * 0.7, p.angle + tOffset - tA * 0.55, p.angle + tOffset + tA * 0.55);
-          ctx.closePath();
-          ctx.fillStyle = p.weapon === 2
-            ? `rgba(110,200,255,${tAlpha})`
-            : `rgba(255,190,80,${tAlpha})`;
-          ctx.fill();
-        }
-
-        const mainAngle = p.angle + swingOffset;
-        const baseAlpha = 0.04 + swingPeak * 0.08;
-        ctx.beginPath(); ctx.moveTo(0, 0);
-        ctx.arc(0, 0, hitR, mainAngle - arcA, mainAngle + arcA);
-        ctx.closePath();
-        ctx.fillStyle = p.weapon === 2
-          ? `rgba(110,200,255,${baseAlpha})`
-          : `rgba(255,190,80,${baseAlpha})`;
-        ctx.fill();
-
-        const edgeAlpha = 0.18 + swingPeak * 0.22;
-        ctx.beginPath();
-        ctx.arc(0, 0, hitR, mainAngle - arcA, mainAngle + arcA);
-        ctx.strokeStyle = p.weapon === 2
-          ? `rgba(140,220,255,${edgeAlpha})`
-          : `rgba(255,210,100,${edgeAlpha})`;
-        ctx.lineWidth = 1.6; ctx.stroke();
-
-        ctx.restore();
       }
 
       // Kill badge
@@ -14334,11 +14323,6 @@ function checkBuildingDamage() {
         if (bp.type === 6) {
           var trapR = (bp.radius || 42) + 32;
           if (Math.abs(_opdx) > trapR || Math.abs(_opdy) > trapR || _opd2 > trapR * trapR) continue;
-          op._trappedBy = bp._netId;
-          op._trappedX = op.x;
-          op._trappedY = op.y;
-          op.vx = 0;
-          op.vy = 0;
           var trCdKey = 'trap_pvp_' + opId + '_' + bp._netId;
           if (now - (_spikeEnemyCooldowns.get(trCdKey) || 0) < 600) continue;
           _spikeEnemyCooldowns.set(trCdKey, now);

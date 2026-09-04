@@ -984,12 +984,23 @@
                         <div class="flex items-center gap-2 text-[9px] font-black text-white/60 mt-0.5">
                             <span id="prof-user-id">ID: --</span><span class="text-white/25">|</span><span id="prof-email" class="truncate">E-posta doğrulanıyor</span>
                         </div>
-                        <div class="flex items-center gap-2 mt-1 flex-wrap">
-                            <span id="prof-rank-name" class="bg-gradient-to-r from-yellow-400 to-amber-500 text-black px-1 py-0.5 rounded font-io text-xs shadow flex items-center gap-1"><canvas id="prof-rank-canvas" width="42" height="42" aria-label="Mevcut rank"></canvas><span id="prof-rank-level">LV.1</span></span>
-                            <span id="prof-rank-icon" class="bg-black/50 w-9 h-9 flex items-center justify-center rounded-lg text-yellow-300 font-black border border-yellow-500/40"><canvas id="prof-rank-mini" width="42" height="42" aria-label="Rank rozeti"></canvas></span>
-                            <span id="prof-gold-badge" class="bg-black/50 px-2 py-1 rounded-lg text-[10px] text-[#FFDF73] font-black border border-yellow-500/40"><i class="fa-solid fa-coins text-[#F7C02D]"></i> --</span>
+                        <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                            <div class="flex items-center gap-2 bg-black/60 px-2.5 py-1 rounded-lg border border-yellow-500/40 shadow-inner">
+                                <canvas id="prof-rank-canvas" width="56" height="56" class="w-7 h-7" aria-label="Mevcut Rank"></canvas>
+                                <span id="prof-rank-title" class="font-io text-xs text-yellow-300 stroke-text font-black tracking-wide">Tohum</span>
+                            </div>
+                            <div id="prof-gold-badge" class="flex items-center gap-1.5 bg-black/60 px-2.5 py-1 rounded-lg border border-yellow-500/40 text-xs font-black text-[#FFDF73] shadow-inner">
+                                <img src="asset/gold.png" class="w-4 h-4 object-contain" alt="Altın">
+                                <span id="prof-gold-val">0</span>
+                            </div>
                         </div>
-                        <div id="prof-next-rank" class="text-[10px] font-black text-[#9FE870] mt-1 flex items-center gap-1"><span>SONRAKİ</span><canvas id="prof-next-rank-canvas" width="34" height="34" aria-label="Sonraki rank"></canvas><span id="prof-next-rank-xp">350 XP kaldı</span></div>
+                        <div id="prof-next-rank" class="text-[10px] font-black text-[#9FE870] mt-1.5 flex items-center gap-1.5 bg-black/30 px-2 py-0.5 rounded border border-white/10 w-fit">
+                            <span class="text-white/60">SONRAKİ RANK:</span>
+                            <canvas id="prof-next-rank-canvas" width="48" height="48" class="w-5 h-5" aria-label="Sonraki Rank"></canvas>
+                            <span id="prof-next-rank-name" class="text-yellow-300">Taş</span>
+                            <span class="text-white/30">•</span>
+                            <span id="prof-next-rank-xp">350 XP kaldı</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1027,8 +1038,8 @@
                         <span id="prof-games" class="font-io text-base text-blue-300 stroke-text">0</span>
                     </div>
                     <div class="bg-black/30 p-2 rounded-lg border border-white/10 text-center">
-                        <span class="text-[9px] font-black text-gray-400 block">COINS</span>
-                        <span id="prof-coins" class="font-io text-base text-yellow-400 stroke-text">--</span>
+                        <span class="text-[9px] font-black text-gray-400 block">ALTIN</span>
+                        <span id="prof-coins" class="font-io text-base text-yellow-400 stroke-text flex items-center justify-center gap-1">--</span>
                     </div>
                 </div>
 
@@ -1721,15 +1732,19 @@
 
         function updateGoldDisplays() {
             const gold = getPlayerGold();
-            const formatGold = (value) => `${value.toLocaleString()} <span class="gold-token"><i class="fa-solid fa-coins"></i></span>`;
+            const formatGold = (value) => `${value.toLocaleString()} <img src="asset/gold.png" class="w-4 h-4 inline-block object-contain" alt="Altın">`;
             const hg = document.getElementById('header-gold');
             if (hg) hg.innerHTML = formatGold(gold);
             const sg = document.getElementById('shop-gold-display');
             if (sg) sg.innerHTML = formatGold(gold);
             const pg = document.getElementById('prof-coins');
-            if (pg) pg.innerHTML = formatGold(gold);
-            const pgb = document.getElementById('prof-gold-badge');
-            if (pgb) pgb.innerHTML = `<i class="fa-solid fa-coins text-[#F7C02D]"></i> ${gold.toLocaleString()}`;
+            if (pg) pg.innerHTML = `${gold.toLocaleString()} <img src="asset/gold.png" class="w-3.5 h-3.5 inline-block object-contain" alt="Altın">`;
+            const gv = document.getElementById('prof-gold-val');
+            if (gv) gv.textContent = gold.toLocaleString();
+            else {
+                const pgb = document.getElementById('prof-gold-badge');
+                if (pgb) pgb.innerHTML = `<img src="asset/gold.png" class="w-4 h-4 object-contain" alt="Altın"> <span>${gold.toLocaleString()}</span>`;
+            }
         }
 
         /* ════════════════════════════════════════════════════════════════
@@ -1872,9 +1887,11 @@
             const xpText = document.getElementById('header-xp-text');
             if (nameEl) nameEl.textContent = String(user.username || 'Oyuncu');
             if (idEl) idEl.textContent = `ID: ${user.id ?? '--'}`;
-            if (levelEl) levelEl.textContent = `LV.${rankId + 1}`;
+            if (levelEl) levelEl.textContent = RANKS[rankId] || 'Tohum';
             if (xpBar) xpBar.style.width = `${percent}%`;
             if (xpText) xpText.textContent = rankId >= RANK_XP_THRESHOLDS.length - 1 ? `${xp.toLocaleString()} XP` : `${xp.toLocaleString()} / ${nextBase.toLocaleString()} XP`;
+            const hr = document.getElementById('header-rank');
+            if (hr) hr.textContent = `${RANK_ICONS[rankId] || '🌱'} ${RANKS[rankId] || 'Savaşçı'}`;
         }
 
         function pingServer() {
@@ -1979,7 +1996,7 @@
                 if (hu) hu.textContent = _authUser.username;
                 const hr = document.getElementById('header-rank');
                 const rankId = getRankIdByXp(Number(_authUser.xp ?? getPlayerTotalXp()));
-                if (hr) hr.textContent = `Lv.${rankId + 1} ${RANKS[rankId] || 'Savaşçı'} ${RANK_ICONS[rankId] || ''}`;
+                if (hr) hr.textContent = `${RANK_ICONS[rankId] || '🌱'} ${RANKS[rankId] || 'Savaşçı'}`;
                 
                 const ni = document.getElementById('name-input');
                 if (ni) { ni.value = _authUser.username; ni.disabled = true; ni.title = 'Profil adı kullanıcı adıyla sabittir'; }
@@ -2151,45 +2168,329 @@
             return `<i class="fa-solid ${icons[Math.max(0, Math.min(icons.length - 1, rankId))] || 'fa-star'}"></i>`;
         }
 
-        function drawProfileRankBadge(canvas, rankId) {
-            if (!canvas) return;
-            const palettes = [
-                ['#6dbf3c','#1a4a08','#d4ffaa'], ['#aab0b8','#282e34','#eef4f8'], ['#c87840','#3a1800','#ffe4b8'],
-                ['#6898c8','#102030','#c8e8ff'], ['#2890ff','#040e60','#b0d8ff'], ['#28e060','#043818','#98ffcc'],
-                ['#ff5010','#6a0000','#ffbf98'], ['#00e0f8','#002838','#80f8ff'], ['#c040f8','#180030','#e4a0ff'],
-                ['#3848d8','#020418','#a8b0ff'], ['#ffc800','#602800','#fff098'], ['#ff80d8','#280018','#ffecf8']
-            ];
-            const [outer, inner, shine] = palettes[Math.max(0, Math.min(11, rankId | 0))];
-            const context = canvas.getContext('2d');
-            const size = Math.min(canvas.width, canvas.height);
-            const center = size / 2;
-            const radius = size * .39;
-            context.clearRect(0, 0, canvas.width, canvas.height);
-            context.save();
-            context.translate(center, center);
-            context.shadowColor = outer;
-            context.shadowBlur = size * .18;
-            context.fillStyle = outer;
-            context.strokeStyle = shine;
-            context.lineWidth = Math.max(2, size * .06);
-            context.beginPath();
-            for (let index = 0; index < 12; index++) {
-                const angle = -Math.PI / 2 + index * Math.PI / 6;
-                const x = Math.cos(angle) * radius;
-                const y = Math.sin(angle) * radius;
-                if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+        const _DODEC_COS = new Float32Array(12), _DODEC_SIN = new Float32Array(12);
+        (function(){
+            const a0 = -Math.PI / 2;
+            for (let i = 0; i < 12; i++) {
+                const a = a0 + i * Math.PI / 6;
+                _DODEC_COS[i] = Math.cos(a);
+                _DODEC_SIN[i] = Math.sin(a);
             }
-            context.closePath(); context.fill(); context.stroke();
-            context.shadowBlur = 0;
-            context.fillStyle = inner;
-            context.beginPath(); context.arc(0, 0, radius * .72, 0, Math.PI * 2); context.fill();
-            context.strokeStyle = `${shine}aa`; context.lineWidth = Math.max(1, size * .035);
-            context.beginPath(); context.arc(0, 0, radius * .58, 0, Math.PI * 2); context.stroke();
-            context.fillStyle = shine;
-            context.font = `900 ${Math.max(10, size * .28)}px Arial`;
-            context.textAlign = 'center'; context.textBaseline = 'middle';
-            context.fillText(String((rankId | 0) + 1), 0, 1);
-            context.restore();
+        })();
+
+        const _RANK_META = [
+          ['#6dbf3c','#1a4a08','#3d8a10','rgba(80,180,40,0.65)','#d4ffaa','Tohum'],
+          ['#aab0b8','#282e34','#60707a','rgba(140,160,180,0.55)','#eef4f8','Taş'],
+          ['#c87840','#3a1800','#8a4818','rgba(200,130,60,0.62)','#ffe4b8','Köylü'],
+          ['#6898c8','#102030','#306888','rgba(80,140,200,0.72)','#c8e8ff','Acemi'],
+          ['#2890ff','#040e60','#0840c0','rgba(40,140,255,0.90)','#b0d8ff','Savaşçı'],
+          ['#28e060','#043818','#10a040','rgba(30,210,80,0.90)','#98ffcc','Muhafız'],
+          ['#ff5010','#6a0000','#cc2800','rgba(255,80,20,0.96)','#ffbf98','Ateş Efendisi'],
+          ['#00e0f8','#002838','#0088b0','rgba(0,210,240,0.96)','#80f8ff','Kristal'],
+          ['#c040f8','#180030','#8000d0','rgba(200,40,255,0.97)','#e4a0ff','Fırtına'],
+          ['#3848d8','#020418','#182070','rgba(50,70,220,0.97)','#a8b0ff','Gece Hanı'],
+          ['#ffc800','#602800','#e07000','rgba(255,200,0,1.0)','#fff098','Efsane'],
+          ['#ff80d8','#280018','#c00068','rgba(255,80,200,1.0)','#ffecf8','Tanrısal']
+        ];
+
+        function _drawDodecagon(ctx, r) {
+            ctx.beginPath();
+            ctx.moveTo(r * _DODEC_COS[0], r * _DODEC_SIN[0]);
+            for (let i = 1; i < 12; i++) ctx.lineTo(r * _DODEC_COS[i], r * _DODEC_SIN[i]);
+            ctx.closePath();
+        }
+
+        function _drawRankDecor(ctx, rid, r, t) {
+            const s = r * 0.55;
+            ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
+            switch(rid) {
+                case 0: { // Tohum — fidan yaprak
+                    ctx.strokeStyle='rgba(160,255,60,0.72)'; ctx.lineWidth=r*0.11;
+                    ctx.beginPath(); ctx.moveTo(0,s*0.9); ctx.lineTo(0,-s*0.18); ctx.stroke();
+                    ctx.fillStyle='rgba(110,220,30,0.72)';
+                    ctx.beginPath(); ctx.moveTo(0,-s*0.05); ctx.quadraticCurveTo(-s*1.0,-s*0.4,-s*0.1,-s*0.88); ctx.quadraticCurveTo(-s*0.05,-s*0.35,0,-s*0.05); ctx.fill();
+                    ctx.beginPath(); ctx.moveTo(0,-s*0.28); ctx.quadraticCurveTo(s*1.0,-s*0.58,s*0.08,-s*1.02); ctx.quadraticCurveTo(s*0.04,-s*0.46,0,-s*0.28); ctx.fill();
+                    ctx.strokeStyle='rgba(200,255,100,0.5)'; ctx.lineWidth=r*0.07;
+                    ctx.beginPath(); ctx.moveTo(0,-s*0.05); ctx.lineTo(-s*0.42,-s*0.52); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0,-s*0.28); ctx.lineTo(s*0.38,-s*0.7); ctx.stroke();
+                    break;
+                }
+                case 1: { // Taş — çatlak
+                    ctx.strokeStyle='rgba(20,28,35,0.58)'; ctx.lineWidth=r*0.11;
+                    ctx.beginPath(); ctx.moveTo(-s*0.72,-s*0.82); ctx.lineTo(-s*0.08,-s*0.05); ctx.lineTo(s*0.58,s*0.78); ctx.stroke();
+                    ctx.lineWidth=r*0.08;
+                    ctx.beginPath(); ctx.moveTo(-s*0.08,-s*0.05); ctx.lineTo(s*0.68,-s*0.52); ctx.stroke();
+                    ctx.lineWidth=r*0.06;
+                    ctx.beginPath(); ctx.moveTo(s*0.58,s*0.78); ctx.lineTo(s*0.82,s*0.18); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(-s*0.72,-s*0.82); ctx.lineTo(-s*0.9,-s*0.3); ctx.stroke();
+                    ctx.strokeStyle='rgba(255,255,255,0.16)'; ctx.lineWidth=r*0.05;
+                    ctx.beginPath(); ctx.moveTo(-s*0.66,-s*0.74); ctx.lineTo(-s*0.04,s*0.02); ctx.lineTo(s*0.52,s*0.7); ctx.stroke();
+                    ctx.fillStyle='rgba(200,215,225,0.35)';
+                    ctx.beginPath(); ctx.ellipse(-s*0.42,-s*0.42,s*0.18,s*0.1,-0.5,0,Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.ellipse(s*0.3,s*0.35,s*0.14,s*0.08,0.4,0,Math.PI*2); ctx.fill();
+                    break;
+                }
+                case 2: { // Köylü — ahşap halka
+                    ctx.strokeStyle='rgba(55,18,0,0.48)'; ctx.lineWidth=r*0.095;
+                    for(let i=-2;i<=2;i++){const yw=i*s*0.37,xO=Math.abs(i)*s*0.08;ctx.beginPath();ctx.ellipse(0,yw,s*(0.78-xO),s*0.1,0,0,Math.PI);ctx.stroke();}
+                    ctx.strokeStyle='rgba(150,70,15,0.32)'; ctx.lineWidth=r*0.055;
+                    for(let x=-s*0.46;x<=s*0.5;x+=s*0.24){ctx.beginPath();ctx.moveTo(x,-s*0.85);ctx.quadraticCurveTo(x+s*0.08,0,x-s*0.04,s*0.85);ctx.stroke();}
+                    ctx.strokeStyle='rgba(40,10,0,0.4)'; ctx.lineWidth=r*0.07;
+                    ctx.beginPath(); ctx.ellipse(s*0.18,-s*0.12,s*0.22,s*0.16,0.5,0,Math.PI*2); ctx.stroke();
+                    ctx.strokeStyle='rgba(80,25,0,0.25)'; ctx.lineWidth=r*0.05;
+                    ctx.beginPath(); ctx.ellipse(s*0.18,-s*0.12,s*0.12,s*0.08,0.5,0,Math.PI*2); ctx.stroke();
+                    break;
+                }
+                case 3: { // Acemi — kılıç
+                    const sw=r*0.11;
+                    ctx.fillStyle='rgba(140,195,228,0.82)';
+                    ctx.beginPath();ctx.moveTo(0,-s*0.94);ctx.lineTo(sw,s*0.06);ctx.lineTo(-sw,s*0.06);ctx.closePath();ctx.fill();
+                    ctx.fillStyle='rgba(255,255,255,0.44)';
+                    ctx.beginPath();ctx.moveTo(-sw*0.25,-s*0.90);ctx.lineTo(-sw*0.55,-s*0.22);ctx.lineTo(0,-s*0.04);ctx.closePath();ctx.fill();
+                    ctx.fillStyle='rgba(70,115,155,0.9)';
+                    ctx.beginPath();ctx.roundRect(-s*0.46,s*0.02,s*0.92,s*0.16,r*0.06);ctx.fill();
+                    ctx.fillStyle='rgba(255,255,255,0.25)';
+                    ctx.beginPath();ctx.roundRect(-s*0.44,s*0.03,s*0.88,s*0.06,r*0.04);ctx.fill();
+                    ctx.fillStyle='rgba(90,48,12,0.88)';
+                    ctx.beginPath();ctx.roundRect(-sw*0.82,s*0.18,sw*1.64,s*0.6,r*0.05);ctx.fill();
+                    ctx.strokeStyle='rgba(180,140,60,0.5)';ctx.lineWidth=r*0.055;
+                    ctx.beginPath();ctx.moveTo(-sw*0.82,s*0.32);ctx.lineTo(sw*0.82,s*0.32);ctx.stroke();
+                    ctx.beginPath();ctx.moveTo(-sw*0.82,s*0.48);ctx.lineTo(sw*0.82,s*0.48);ctx.stroke();
+                    ctx.fillStyle='rgba(120,170,200,0.9)';
+                    ctx.beginPath();ctx.arc(0,s*0.88,sw*1.35,0,Math.PI*2);ctx.fill();
+                    ctx.fillStyle='rgba(255,255,255,0.4)';
+                    ctx.beginPath();ctx.arc(-sw*0.35,s*0.82,sw*0.5,0,Math.PI*2);ctx.fill();
+                    break;
+                }
+                case 4: { // Savaşçı — çapraz kılıçlar
+                    const sw=r*0.095;
+                    for(const ang of[-Math.PI/4,Math.PI/4]){
+                        ctx.save(); ctx.rotate(ang);
+                        ctx.fillStyle='rgba(70,145,255,0.85)';
+                        ctx.beginPath();ctx.moveTo(0,-s*0.94);ctx.lineTo(sw,-s*0.0);ctx.lineTo(-sw,-s*0.0);ctx.closePath();ctx.fill();
+                        ctx.fillStyle='rgba(180,220,255,0.52)';
+                        ctx.beginPath();ctx.moveTo(-sw*0.2,-s*0.90);ctx.lineTo(-sw*0.55,-s*0.28);ctx.lineTo(0,-s*0.44);ctx.closePath();ctx.fill();
+                        ctx.fillStyle='rgba(25,75,200,0.95)';
+                        ctx.beginPath();ctx.roundRect(-s*0.4,-s*0.08,s*0.8,s*0.15,r*0.05);ctx.fill();
+                        ctx.fillStyle='rgba(255,255,255,0.22)';
+                        ctx.beginPath();ctx.roundRect(-s*0.38,-s*0.07,s*0.76,s*0.06,r*0.03);ctx.fill();
+                        ctx.fillStyle='rgba(15,50,150,0.88)';
+                        ctx.beginPath();ctx.roundRect(-sw*0.78,s*0.07,sw*1.56,s*0.48,r*0.04);ctx.fill();
+                        ctx.restore();
+                    }
+                    ctx.fillStyle='rgba(200,230,255,0.9)';
+                    ctx.beginPath();ctx.arc(0,0,r*0.1,0,Math.PI*2);ctx.fill();
+                    break;
+                }
+                case 5: { // Muhafız — kalkan
+                    ctx.fillStyle='rgba(18,155,58,0.75)';
+                    ctx.beginPath();ctx.moveTo(0,-s*0.94);ctx.lineTo(s*0.74,-s*0.38);ctx.lineTo(s*0.74,s*0.32);ctx.lineTo(0,s*0.94);ctx.lineTo(-s*0.74,s*0.32);ctx.lineTo(-s*0.74,-s*0.38);ctx.closePath();ctx.fill();
+                    ctx.strokeStyle='rgba(140,255,120,0.58)';ctx.lineWidth=r*0.1;ctx.stroke();
+                    ctx.fillStyle='rgba(10,120,40,0.55)';
+                    ctx.beginPath();ctx.moveTo(0,-s*0.5);ctx.lineTo(s*0.42,-s*0.18);ctx.lineTo(s*0.42,s*0.22);ctx.lineTo(0,s*0.5);ctx.lineTo(-s*0.42,s*0.22);ctx.lineTo(-s*0.42,-s*0.18);ctx.closePath();ctx.fill();
+                    ctx.strokeStyle='rgba(180,255,160,0.55)';ctx.lineWidth=r*0.085;
+                    ctx.beginPath();ctx.moveTo(0,-s*0.58);ctx.lineTo(0,s*0.58);ctx.moveTo(-s*0.52,0);ctx.lineTo(s*0.52,0);ctx.stroke();
+                    ctx.fillStyle='rgba(255,255,255,0.34)';
+                    ctx.beginPath();ctx.moveTo(-s*0.6,-s*0.3);ctx.lineTo(0,-s*0.9);ctx.lineTo(s*0.22,-s*0.42);ctx.lineTo(-s*0.16,-s*0.08);ctx.closePath();ctx.fill();
+                    ctx.fillStyle='rgba(200,255,170,0.8)';
+                    ctx.beginPath();ctx.arc(0,0,r*0.1,0,Math.PI*2);ctx.fill();
+                    break;
+                }
+                case 6: { // Ateş Efendisi — alev
+                    ctx.fillStyle='rgba(255,95,5,0.80)';
+                    ctx.beginPath();ctx.moveTo(0,s*0.9);ctx.bezierCurveTo(-s*0.58,s*0.4,-s*0.68,-s*0.08,-s*0.14,-s*0.54);ctx.bezierCurveTo(-s*0.24,-s*0.1,s*0.06,s*0.08,0,-s*0.94);ctx.bezierCurveTo(s*0.44,-s*0.34,s*0.54,s*0.2,s*0.16,s*0.58);ctx.bezierCurveTo(s*0.5,s*0.44,s*0.6,s*0.74,0,s*0.9);ctx.closePath();ctx.fill();
+                    ctx.fillStyle='rgba(255,185,15,0.82)';
+                    ctx.beginPath();ctx.moveTo(0,s*0.56);ctx.bezierCurveTo(-s*0.32,s*0.14,-s*0.36,-s*0.18,0,-s*0.68);ctx.bezierCurveTo(s*0.32,-s*0.12,s*0.36,s*0.18,0,s*0.56);ctx.closePath();ctx.fill();
+                    ctx.fillStyle='rgba(255,252,180,0.88)';
+                    ctx.beginPath();ctx.moveTo(0,s*0.28);ctx.bezierCurveTo(-s*0.16,s*0.05,-s*0.18,-s*0.1,0,-s*0.38);ctx.bezierCurveTo(s*0.16,-s*0.05,s*0.18,s*0.1,0,s*0.28);ctx.closePath();ctx.fill();
+                    ctx.fillStyle='rgba(255,255,240,0.9)';
+                    ctx.beginPath();ctx.arc(0,-s*0.18,r*0.1,0,Math.PI*2);ctx.fill();
+                    break;
+                }
+                case 7: { // Kristal
+                    ctx.strokeStyle='rgba(100,235,255,0.62)'; ctx.lineWidth=r*0.075;
+                    for(let i=0;i<6;i++){const a=(i*Math.PI)/6;ctx.beginPath();ctx.moveTo(Math.cos(a)*s*0.9,Math.sin(a)*s*0.9);ctx.lineTo(-Math.cos(a)*s*0.9,-Math.sin(a)*s*0.9);ctx.stroke();}
+                    ctx.strokeStyle='rgba(180,250,255,0.45)'; ctx.lineWidth=r*0.065;
+                    ctx.beginPath();
+                    for(let i=0;i<6;i++){const a=(i*Math.PI/3)-Math.PI/6;i===0?ctx.moveTo(Math.cos(a)*s*0.65,Math.sin(a)*s*0.65):ctx.lineTo(Math.cos(a)*s*0.65,Math.sin(a)*s*0.65);}
+                    ctx.closePath();ctx.stroke();
+                    const cg7=ctx.createRadialGradient(0,0,0,0,0,s*0.35);
+                    cg7.addColorStop(0,'rgba(255,255,255,0.95)');cg7.addColorStop(0.4,'rgba(140,248,255,0.75)');cg7.addColorStop(1,'rgba(0,200,240,0)');
+                    ctx.fillStyle=cg7;ctx.beginPath();ctx.arc(0,0,s*0.35,0,Math.PI*2);ctx.fill();
+                    ctx.fillStyle='rgba(255,255,255,0.85)';
+                    for(const[sx,sy,sr]of[[s*0.75,-s*0.75,r*0.08],[-s*0.75,-s*0.75,r*0.06],[s*0.75,s*0.75,r*0.065],[-s*0.75,s*0.75,r*0.07]]){
+                        ctx.save();ctx.translate(sx,sy);
+                        ctx.beginPath();ctx.moveTo(0,-sr*2);ctx.lineTo(sr*0.6,-sr*0.6);ctx.lineTo(sr*2,0);ctx.lineTo(sr*0.6,sr*0.6);ctx.lineTo(0,sr*2);ctx.lineTo(-sr*0.6,sr*0.6);ctx.lineTo(-sr*2,0);ctx.lineTo(-sr*0.6,-sr*0.6);ctx.closePath();ctx.fill();
+                        ctx.restore();
+                    }
+                    break;
+                }
+                case 8: { // Fırtına — şimşek
+                    ctx.fillStyle='rgba(210,155,255,0.88)';
+                    ctx.beginPath();ctx.moveTo(s*0.18,-s*0.94);ctx.lineTo(-s*0.38,-s*0.04);ctx.lineTo(s*0.06,-s*0.04);ctx.lineTo(-s*0.24,s*0.94);ctx.lineTo(s*0.44,s*0.0);ctx.lineTo(s*0.02,s*0.0);ctx.lineTo(s*0.54,-s*0.94);ctx.closePath();ctx.fill();
+                    ctx.strokeStyle='rgba(255,255,255,0.52)';ctx.lineWidth=r*0.065;ctx.stroke();
+                    ctx.fillStyle='rgba(255,255,255,0.65)';
+                    ctx.beginPath();ctx.moveTo(s*0.26,-s*0.84);ctx.lineTo(-s*0.2,-s*0.08);ctx.lineTo(s*0.12,-s*0.08);ctx.lineTo(-s*0.1,s*0.65);ctx.lineTo(s*0.32,s*0.02);ctx.lineTo(s*0.08,s*0.02);ctx.lineTo(s*0.46,-s*0.84);ctx.closePath();ctx.fill();
+                    ctx.strokeStyle='rgba(220,160,255,0.68)';ctx.lineWidth=r*0.065;
+                    ctx.beginPath();ctx.moveTo(-s*0.72,-s*0.52);ctx.quadraticCurveTo(-s*0.5,-s*0.18,-s*0.38,-s*0.04);ctx.stroke();
+                    ctx.beginPath();ctx.moveTo(s*0.7,s*0.5);ctx.quadraticCurveTo(s*0.55,s*0.22,s*0.44,s*0.0);ctx.stroke();
+                    ctx.fillStyle='rgba(255,240,255,0.9)';
+                    for(const[sx,sy]of[[-s*0.78,-s*0.7],[s*0.78,s*0.68],[-s*0.6,s*0.0],[s*0.6,-s*0.62]]){
+                        ctx.beginPath();ctx.arc(sx,sy,r*0.07,0,Math.PI*2);ctx.fill();
+                    }
+                    break;
+                }
+                case 9: { // Gece Hanı — hilal + yıldız
+                    ctx.fillStyle='rgba(6,10,48,0.58)';
+                    ctx.beginPath();ctx.arc(0,0,s*0.88,0,Math.PI*2);ctx.fill();
+                    const mg9=ctx.createRadialGradient(-s*0.14,-s*0.05,0,-s*0.14,-s*0.05,s*0.65);
+                    mg9.addColorStop(0,'rgba(210,220,255,0.95)');mg9.addColorStop(0.6,'rgba(165,180,248,0.88)');mg9.addColorStop(1,'rgba(100,120,210,0.5)');
+                    ctx.fillStyle=mg9;ctx.beginPath();ctx.arc(-s*0.14,-s*0.04,s*0.62,0,Math.PI*2);ctx.fill();
+                    ctx.fillStyle='rgba(5,8,38,0.97)';
+                    ctx.beginPath();ctx.arc(s*0.22,-s*0.08,s*0.52,0,Math.PI*2);ctx.fill();
+                    ctx.strokeStyle='rgba(160,180,255,0.42)';ctx.lineWidth=r*0.08;
+                    ctx.beginPath();ctx.arc(-s*0.14,-s*0.04,s*0.62,0,Math.PI*2);ctx.stroke();
+                    ctx.fillStyle='rgba(225,232,255,0.95)';
+                    for(const[sx,sy,sr9]of[[s*0.6,-s*0.65,r*0.075],[s*0.76,-s*0.08,r*0.055],[s*0.5,s*0.64,r*0.065],[-s*0.62,-s*0.55,r*0.055],[s*0.3,s*0.88,r*0.048]]){
+                        ctx.save();ctx.translate(sx,sy);
+                        ctx.beginPath();
+                        for(let k=0;k<5;k++){const a=(k*4*Math.PI/5)-Math.PI/2,a2=a+Math.PI/5;k===0?ctx.moveTo(sr9*1.7*Math.cos(a),sr9*1.7*Math.sin(a)):ctx.lineTo(sr9*1.7*Math.cos(a),sr9*1.7*Math.sin(a));ctx.lineTo(sr9*0.65*Math.cos(a2),sr9*0.65*Math.sin(a2));}
+                        ctx.closePath();ctx.fill();ctx.restore();
+                    }
+                    break;
+                }
+                case 10: { // Efsane — altın taç
+                    const cw=s*0.88,ch=s*0.7;
+                    ctx.fillStyle='rgba(255,192,8,0.90)';
+                    ctx.beginPath();ctx.roundRect(-cw*0.5,ch*0.08,cw,ch*0.5,r*0.1);ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(-cw*0.5,ch*0.12);ctx.lineTo(-cw*0.42,-ch*0.64);ctx.lineTo(-cw*0.24,ch*0.08);
+                    ctx.lineTo(-cw*0.08,-ch*0.9);ctx.lineTo(cw*0.08,-ch*0.9);
+                    ctx.lineTo(cw*0.24,ch*0.08);ctx.lineTo(cw*0.42,-ch*0.64);ctx.lineTo(cw*0.5,ch*0.12);
+                    ctx.closePath();ctx.fill();
+                    ctx.strokeStyle='rgba(255,238,70,0.62)';ctx.lineWidth=r*0.085;ctx.stroke();
+                    for(const[gx,col,hcol]of[[-cw*0.3,'#ff4444','#ff9999'],[0,'#4488ff','#aaccff'],[cw*0.3,'#44ee88','#aaffcc']]){
+                        ctx.fillStyle=col;ctx.beginPath();ctx.arc(gx,ch*0.32,r*0.115,0,Math.PI*2);ctx.fill();
+                        ctx.fillStyle=hcol;ctx.beginPath();ctx.arc(gx-r*0.04,ch*0.28,r*0.048,0,Math.PI*2);ctx.fill();
+                    }
+                    ctx.fillStyle='rgba(255,255,255,0.28)';
+                    ctx.beginPath();ctx.moveTo(-cw*0.44,-ch*0.52);ctx.lineTo(-cw*0.08,-ch*0.86);ctx.lineTo(cw*0.08,-ch*0.86);ctx.lineTo(cw*0.26,-ch*0.08);ctx.lineTo(-cw*0.28,-ch*0.08);ctx.closePath();ctx.fill();
+                    ctx.fillStyle='rgba(255,255,180,0.95)';
+                    ctx.beginPath();ctx.arc(0,-ch*0.88,r*0.1,0,Math.PI*2);ctx.fill();
+                    break;
+                }
+                case 11: { // Tanrısal — ilahi aura + halka
+                    const rays=18;
+                    const ag11=ctx.createRadialGradient(0,0,s*0.18,0,0,s*0.95);
+                    ag11.addColorStop(0,'rgba(255,255,255,0)');ag11.addColorStop(0.6,'rgba(255,180,240,0.18)');ag11.addColorStop(1,'rgba(255,80,200,0.38)');
+                    ctx.fillStyle=ag11;ctx.beginPath();ctx.arc(0,0,s*0.95,0,Math.PI*2);ctx.fill();
+                    ctx.lineWidth=r*0.11;
+                    const hue11=t?(t*0.5)%360:0;
+                    ctx.strokeStyle=`hsla(${hue11},100%,85%,0.7)`;
+                    ctx.beginPath();ctx.arc(0,0,s*0.88,0,Math.PI*2);ctx.stroke();
+                    ctx.lineWidth=r*0.065;
+                    ctx.strokeStyle=`hsla(${(hue11+60)%360},100%,88%,0.45)`;
+                    ctx.beginPath();ctx.arc(0,0,s*0.6,0,Math.PI*2);ctx.stroke();
+                    for(let i=0;i<rays;i++){
+                        const a=(i*Math.PI*2/rays)+(t?t*0.001:0);
+                        const isLong=i%2===0;
+                        const len=isLong?s*0.75:s*0.5;
+                        const rh=(hue11+i*20)%360;
+                        ctx.strokeStyle=`hsla(${rh},100%,82%,${isLong?0.72:0.4})`;
+                        ctx.lineWidth=r*(isLong?0.1:0.065);
+                        ctx.beginPath();ctx.moveTo(Math.cos(a)*s*0.22,Math.sin(a)*s*0.22);ctx.lineTo(Math.cos(a)*len,Math.sin(a)*len);ctx.stroke();
+                    }
+                    const og11=ctx.createRadialGradient(0,0,0,0,0,s*0.3);
+                    og11.addColorStop(0,'rgba(255,255,255,1)');og11.addColorStop(0.35,'rgba(255,195,245,0.9)');og11.addColorStop(0.7,'rgba(255,80,200,0.5)');og11.addColorStop(1,'rgba(200,0,160,0)');
+                    ctx.fillStyle=og11;ctx.beginPath();ctx.arc(0,0,s*0.32,0,Math.PI*2);ctx.fill();
+                    break;
+                }
+            }
+            ctx.restore();
+        }
+
+        const _rankGC = {};
+        function _getRankGrad(ctx, rid, r){
+            const sk = r <= 8 ? 0 : 1;
+            const key = rid + '|' + sk;
+            if (_rankGC[key]) return _rankGC[key];
+            const m = _RANK_META[rid], [c1,c2] = m;
+            let fill;
+            if(rid===0){fill=ctx.createRadialGradient(-r*.28,-r*.32,0,r*.1,r*.1,r*1.05);fill.addColorStop(0,'#a0e050');fill.addColorStop(0.4,c1);fill.addColorStop(0.82,c2);fill.addColorStop(1,'#030a00');}
+            else if(rid===1){fill=ctx.createRadialGradient(0,-r*.18,0,0,r*.12,r*0.98);fill.addColorStop(0,'#d5dde5');fill.addColorStop(0.5,'#8898a8');fill.addColorStop(1,'#222830');}
+            else if(rid===2){fill=ctx.createRadialGradient(-r*.22,-r*.28,0,r*.08,r*.08,r*1.02);fill.addColorStop(0,'#e8a060');fill.addColorStop(0.45,c1);fill.addColorStop(0.82,c2);fill.addColorStop(1,'#1a0800');}
+            else if(rid===3){fill=ctx.createRadialGradient(-r*.25,-r*.30,0,0,0,r*1.05);fill.addColorStop(0,'#b0d8f8');fill.addColorStop(0.4,c1);fill.addColorStop(0.82,c2);fill.addColorStop(1,'#020810');}
+            else if(rid===6){fill=ctx.createRadialGradient(0,r*.22,0,0,0,r*1.05);fill.addColorStop(0,'#ffee50');fill.addColorStop(0.25,'#ff8820');fill.addColorStop(0.65,c2);fill.addColorStop(1,'#1a0000');}
+            else if(rid===7){fill=ctx.createRadialGradient(-r*.28,-r*.28,0,0,0,r*1.05);fill.addColorStop(0,'#ffffff');fill.addColorStop(0.22,'#88f0ff');fill.addColorStop(0.7,c2);fill.addColorStop(1,'#000a12');}
+            else if(rid===8){fill=ctx.createRadialGradient(0,0,0,0,0,r);fill.addColorStop(0,'#5020a0');fill.addColorStop(0.45,c2);fill.addColorStop(1,'#080010');}
+            else if(rid===9){fill=ctx.createRadialGradient(0,0,0,0,0,r);fill.addColorStop(0,'#2038b0');fill.addColorStop(0.5,'#080c58');fill.addColorStop(1,'#010210');}
+            else if(rid===10){fill=ctx.createRadialGradient(-r*.2,-r*.22,0,0,0,r*1.06);fill.addColorStop(0,'#fff8a0');fill.addColorStop(0.3,'#ffc800');fill.addColorStop(0.75,c2);fill.addColorStop(1,'#120800');}
+            else if(rid===11){fill=ctx.createRadialGradient(0,0,0,0,0,r);fill.addColorStop(0,'#ffffff');fill.addColorStop(0.18,'#ffddff');fill.addColorStop(0.5,c1);fill.addColorStop(1,c2);}
+            else{fill=ctx.createRadialGradient(-r*.30,-r*.34,0,0,0,r*1.06);fill.addColorStop(0,c1);fill.addColorStop(0.46,c1);fill.addColorStop(0.82,c2);fill.addColorStop(1,'#000');}
+            const shine=ctx.createRadialGradient(-r*.30,-r*.38,0,-r*.12,-r*.18,r*.76);
+            const shA=rid<=2?0.52:rid<=6?0.38:0.22;
+            shine.addColorStop(0,`rgba(255,255,255,${shA})`);shine.addColorStop(0.44,'rgba(255,255,255,0.06)');shine.addColorStop(1,'rgba(255,255,255,0)');
+            const shad=ctx.createRadialGradient(r*.28,r*.32,0,r*.12,r*.18,r*.82);
+            shad.addColorStop(0,'rgba(0,0,0,0.58)');shad.addColorStop(1,'rgba(0,0,0,0)');
+            _rankGC[key]={fill,shine,shad};
+            return _rankGC[key];
+        }
+
+        function drawRankBadge12(ctx, cx, cy, rankId, size, t = 0) {
+            const rid = Math.max(0, Math.min(11, (rankId|0)));
+            const m = _RANK_META[rid];
+            const [c1, c2, cb, cg] = m;
+            const r = size;
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            if (rid >= 3) {
+                const pulse = t ? (Math.sin(t * 0.003) * 0.25 + 0.85) : 1;
+                ctx.shadowColor = cg;
+                ctx.shadowBlur = (5 + rid * 2.6) * pulse;
+            }
+
+            ctx.fillStyle = rid <= 2 ? '#0a0a0a' : rid <= 5 ? '#060810' : rid <= 8 ? '#08040e' : '#040408';
+            _drawDodecagon(ctx, r + 1.5);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            const _gc = _getRankGrad(ctx, rid, r);
+            ctx.fillStyle = _gc.fill;
+            _drawDodecagon(ctx, r); ctx.fill();
+
+            ctx.strokeStyle = cb;
+            ctx.lineWidth = rid <= 2 ? 0.8 : rid <= 6 ? 1.0 : rid <= 9 ? 1.15 : 1.3;
+            _drawDodecagon(ctx, r); ctx.stroke();
+
+            const trimA = [0.18,0.12,0.18,0.22,0.28,0.30,0.32,0.35,0.28,0.22,0.35,0.42][rid];
+            ctx.strokeStyle = `rgba(255,255,255,${trimA})`; ctx.lineWidth = 0.6;
+            _drawDodecagon(ctx, r * 0.68); ctx.stroke();
+
+            ctx.fillStyle = _gc.shine; _drawDodecagon(ctx, r - 1); ctx.fill();
+            ctx.fillStyle = _gc.shad; _drawDodecagon(ctx, r - 1); ctx.fill();
+
+            if (rid >= 7 && rid <= 9) {
+                const rc7 = rid === 7 ? 'rgba(180,248,255,0.2)' : rid === 8 ? 'rgba(220,100,255,0.2)' : 'rgba(100,120,255,0.18)';
+                ctx.strokeStyle = rc7; ctx.lineWidth = 0.85; _drawDodecagon(ctx, r * 0.84); ctx.stroke();
+            }
+
+            ctx.save();
+            _drawDodecagon(ctx, r - 1.8);
+            ctx.clip();
+            _drawRankDecor(ctx, rid, r, t);
+            ctx.restore();
+
+            ctx.restore();
+        }
+
+        function _renderRankBadgeCanvas(canvas, rankId, size = 48) {
+            if (!canvas) return;
+            canvas.width = size * 2;
+            canvas.height = size * 2;
+            const context = canvas.getContext('2d');
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            drawRankBadge12(context, size, size, rankId, size * 0.82, performance.now());
         }
 
         async function updateProfileModalData() {
@@ -2232,18 +2533,23 @@
             document.getElementById('prof-username').textContent = u.username;
             document.getElementById('prof-user-id').textContent = `ID: ${u.id ?? '--'}`;
             document.getElementById('prof-email').textContent = u.email || 'E-posta kayıtlı değil';
-            document.getElementById('prof-rank-level').textContent = `LV.${rankId + 1}`;
-            drawProfileRankBadge(document.getElementById('prof-rank-canvas'), rankId);
-            drawProfileRankBadge(document.getElementById('prof-rank-mini'), rankId);
-            drawProfileRankBadge(document.getElementById('prof-next-rank-canvas'), Math.min(rankId + 1, RANKS.length - 1));
+
+            const rankTitleEl = document.getElementById('prof-rank-title');
+            if (rankTitleEl) rankTitleEl.textContent = currentRankName;
+
+            _renderRankBadgeCanvas(document.getElementById('prof-rank-canvas'), rankId, 48);
+            _renderRankBadgeCanvas(document.getElementById('prof-next-rank-canvas'), Math.min(rankId + 1, RANKS.length - 1), 36);
+
+            const nextRankNameEl = document.getElementById('prof-next-rank-name');
+            if (nextRankNameEl) nextRankNameEl.textContent = nextRankName;
             document.getElementById('prof-next-rank-xp').textContent = rankId >= RANKS.length - 1 ? 'MAKSİMUM RANK' : `${neededToNext.toLocaleString()} XP kaldı`;
             
             if (rankId >= RANKS.length - 1) {
-                document.getElementById('prof-xp-text').textContent = `${totalXp.toLocaleString()} XP (MAKSİMUM SEVİYE)`;
+                document.getElementById('prof-xp-text').textContent = `${totalXp.toLocaleString()} XP (MAKSİMUM RANK)`;
                 document.getElementById('prof-remaining-xp').textContent = 'En yüksek rütbeye ulaştın! 👑';
             } else {
                 document.getElementById('prof-xp-text').textContent = `${totalXp.toLocaleString()} / ${nextBase.toLocaleString()} XP (${pct}%)`;
-                document.getElementById('prof-remaining-xp').textContent = `Sonraki Seviye (${nextRankName}) için: ${neededToNext.toLocaleString()} XP kaldı`;
+                document.getElementById('prof-remaining-xp').textContent = `Sonraki Rank (${nextRankName}) için: ${neededToNext.toLocaleString()} XP kaldı`;
             }
             document.getElementById('prof-xp-bar').style.width = pct + '%';
             
@@ -2254,15 +2560,16 @@
             document.getElementById('prof-best-score').textContent = (u.bestScore || u.score || 0).toLocaleString();
             document.getElementById('prof-games').textContent = (u.gamesPlayed || u.games || 0).toLocaleString();
             const profileGold = u.coins != null ? u.coins : getPlayerGold();
-            document.getElementById('prof-coins').innerHTML = `${profileGold.toLocaleString()} <i class="fa-solid fa-coins text-[#F7C02D]"></i>`;
-            document.getElementById('prof-gold-badge').innerHTML = `<i class="fa-solid fa-coins text-[#F7C02D]"></i> ${profileGold.toLocaleString()}`;
+            document.getElementById('prof-coins').innerHTML = `${profileGold.toLocaleString()} <img src="asset/gold.png" class="w-3.5 h-3.5 inline-block object-contain" alt="Altın">`;
+            const gv = document.getElementById('prof-gold-val');
+            if (gv) gv.textContent = profileGold.toLocaleString();
             updateHeaderProfile(u);
 
             const pImg = document.getElementById('prof-avatar-img');
             if (pImg) pImg.src = `players/${_currentSkin}.png`;
 
             const hr = document.getElementById('header-rank');
-            if (hr) hr.textContent = `Lv.${rankId + 1} ${currentRankName}`;
+            if (hr) hr.textContent = `${RANK_ICONS[rankId] || '🌱'} ${currentRankName}`;
         }
 
         /* ════════════════════════════════════════════════════════════════
