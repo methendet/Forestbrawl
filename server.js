@@ -1843,13 +1843,15 @@ io.on('connection', (socket) => {
         player.x += (dx / distance) * overlap * 0.5;
         player.y += (dy / distance) * overlap * 0.5;
       } else if (!player.trappedBy && other.trappedBy) {
-        // Player is free, other is trapped: player pushes the trapped victim!
-        const pushX = (dx / distance) * overlap * 0.45;
-        const pushY = (dy / distance) * overlap * 0.45;
+        // Player is free, other is trapped: smoothly and slowly push trapped victim (Moomoo.io style)
+        const pushSpeed = Math.min(overlap * 0.35, 2.0);
+        const pushX = (dx / distance) * pushSpeed;
+        const pushY = (dy / distance) * pushSpeed;
         other.x = (Number(other.x) || 0) - pushX;
         other.y = (Number(other.y) || 0) - pushY;
         other.trappedX = other.x;
         other.trappedY = other.y;
+        io.to(otherId).emit('pos_correction', { x: other.x, y: other.y, seq: other.stateSeq || 0 });
       }
       if (overlap > 18) {
         needsPosCorrection = true;
@@ -1883,7 +1885,10 @@ io.on('connection', (socket) => {
     const damage = Math.min(120, Math.round((weapon === 2 ? 30 : 22) * multiplier));
     const angle = Number(data.angle);
     if (!Number.isFinite(angle)) return;
-    const attackerX = Number(attacker.x) || 0, attackerY = Number(attacker.y) || 0;
+    const attackerX = Number.isFinite(Number(data.x)) ? Number(data.x) : (Number(attacker.x) || 0);
+    const attackerY = Number.isFinite(Number(data.y)) ? Number(data.y) : (Number(attacker.y) || 0);
+    attacker.x = attackerX;
+    attacker.y = attackerY;
     attacker.angle = angle;
     attacker.weapon = weapon;
     attacker.isAttacking = true;
@@ -1904,8 +1909,15 @@ io.on('connection', (socket) => {
     for (const [targetId, target] of players) {
       if (targetId === socket.id || target.hp <= 0) continue;
       if ((attacker.clanId && attacker.clanId === target.clanId) || (attacker.team && target.team && attacker.team === target.team)) continue;
-      const rewound = getRewoundPosition(targetId, clientRewindTime) || { x: target.x, y: target.y };
-      const dx = (Number(rewound.x) || 0) - attackerX, dy = (Number(rewound.y) || 0) - attackerY;
+      const rewound = getRewoundPosition(targetId, clientRewindTime);
+      const tx = Number(target.x) || 0, ty = Number(target.y) || 0;
+      const rx = (rewound && Number.isFinite(Number(rewound.x))) ? Number(rewound.x) : tx;
+      const ry = (rewound && Number.isFinite(Number(rewound.y))) ? Number(rewound.y) : ty;
+      const dDirect = Math.hypot(tx - attackerX, ty - attackerY);
+      const dRewound = Math.hypot(rx - attackerX, ry - attackerY);
+      const useX = dDirect < dRewound ? tx : rx;
+      const useY = dDirect < dRewound ? ty : ry;
+      const dx = useX - attackerX, dy = useY - attackerY;
       if (Math.hypot(dx, dy) > range + 56) continue;
       let difference = Math.abs(Math.atan2(dy, dx) - angle);
       if (difference > Math.PI) difference = Math.PI * 2 - difference;
@@ -1931,6 +1943,7 @@ io.on('connection', (socket) => {
           io.emit('bounty_update', { id: null });
         }
         io.to(targetId).emit('pvp_killed', { byName: attacker.name || 'Oyuncu' });
+        io.to(targetId).emit('self_state', { hp: 0 });
         io.emit('player_dead', { id: targetId });
         socket.emit('pvp_kill_confirm', { targetId, targetName: target.name || 'Oyuncu' });
         io.emit('pvp_kill_feed', { killer: attacker.name || 'Oyuncu', victim: target.name || 'Oyuncu', streak: attacker.kills });
@@ -1985,7 +1998,7 @@ io.on('connection', (socket) => {
     const target = players.get(data.targetId);
     if (!target || target.hp <= 0) return;
     if (owner && ((owner.clanId && owner.clanId === target.clanId) || (owner.team && target.team && owner.team === target.team))) return;
-    const buildingId = String(data.buildingId || data.id || '');
+    const buildingId = String(data.buildingId || data.bId || data.id || '');
     const spike = buildings.get(buildingId);
     if (!spike || spike.type !== 3 || (spike.hp ?? 0) <= 0) return;
     if (spike.ownerId !== socket.id) return;
@@ -1993,7 +2006,7 @@ io.on('connection', (socket) => {
     if (distToSpike > (spike.radius || 45) + 60) return;
     const now = Date.now();
     const hitKey = `spike:${socket.id}:${data.targetId}`;
-    if (now - (mobHitCooldowns.get(hitKey) || 0) < 350) return;
+    if (now - (mobHitCooldowns.get(hitKey) || 0) < 320) return;
     mobHitCooldowns.set(hitKey, now);
     const spikeTier = spike.tier || 0;
     const damage = Math.min(180, Math.max(20, [35, 60, 95, 140, 190, 260][spikeTier] || 45));
@@ -2021,6 +2034,45 @@ io.on('connection', (socket) => {
       io.emit('player_dead', { id: data.targetId });
       socket.emit('pvp_kill_confirm', { targetId: data.targetId, targetName: target.name || 'Oyuncu' });
       io.emit('pvp_kill_feed', { killer: owner.name || 'Diken', victim: target.name || 'Oyuncu', streak: owner.kills });
+      persistPlayerScore(owner);
+    }
+  });
+
+  // Direct client spike collision (victim touched enemy spike)
+  socket.on('player_hit_spike', (data = {}) => {
+    const victim = players.get(socket.id);
+    if (!victim || victim.hp <= 0) return;
+    const buildingId = String(data.buildingId || data.bId || data.id || '');
+    const spike = buildings.get(buildingId);
+    if (!spike || spike.type !== 3 || (spike.hp ?? 0) <= 0) return;
+    if (spike.ownerId === socket.id) return;
+    const owner = players.get(spike.ownerId);
+    if (owner && ((owner.clanId && owner.clanId === victim.clanId) || (owner.team && victim.team && owner.team === victim.team))) return;
+    const distToSpike = Math.hypot((Number(victim.x) || 0) - spike.x, (Number(victim.y) || 0) - spike.y);
+    if (distToSpike > (spike.radius || 45) + 65) return;
+    const now = Date.now();
+    const hitKey = `spike_victim:${socket.id}:${buildingId}`;
+    if (now - (mobHitCooldowns.get(hitKey) || 0) < 320) return;
+    mobHitCooldowns.set(hitKey, now);
+    const spikeTier = spike.tier || 0;
+    const damage = Math.min(180, Math.max(20, [35, 60, 95, 140, 190, 260][spikeTier] || 45));
+    victim.hp = Math.max(0, (victim.hp ?? 250) - damage);
+    io.to(socket.id).emit('pvp_hit', { dmg: damage, fromName: owner?.name || 'Diken' });
+    io.to(socket.id).emit('self_state', { hp: victim.hp });
+    io.emit('players', { [socket.id]: compactState(victim) });
+    if (owner && io.sockets.sockets.has(spike.ownerId)) {
+      io.to(spike.ownerId).emit('spike_dmg_confirm', { targetId: socket.id, dmg: damage, targetName: victim.name || 'Oyuncu' });
+    }
+    if (victim.hp <= 0 && owner) {
+      deletePlayerBuildings(socket.id);
+      victim.kills = victim.kills || 0;
+      owner.kills = (owner.kills || 0) + 1;
+      owner.score = (owner.score || 0) + 150;
+      owner.gold = (owner.gold || 0) + 15;
+      io.to(socket.id).emit('pvp_killed', { byName: owner.name || 'Diken' });
+      io.emit('player_dead', { id: socket.id });
+      io.to(spike.ownerId).emit('pvp_kill_confirm', { targetId: socket.id, targetName: victim.name || 'Oyuncu' });
+      io.emit('pvp_kill_feed', { killer: owner.name || 'Diken', victim: victim.name || 'Oyuncu', streak: owner.kills });
       persistPlayerScore(owner);
     }
   });

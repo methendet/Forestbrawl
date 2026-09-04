@@ -3078,9 +3078,9 @@ let _isDying = false; // guard against double-die (pvp_hit + pvp_killed race)
 // PLAYER
 // ============================================================
 const ATTACK_DUR = {
-  1: 42,   // Axe
-  2: 54,   // Katana / Pence (daha yumuşak, daha uzun vuruş)
-  3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, // Buildings
+  1: 18,   // Axe (~300ms, Moomoo.io cadence)
+  2: 14,   // Katana / Sword (~230ms, Moomoo.io cadence)
+  3: 15, 4: 15, 5: 15, 6: 15, 7: 15, 8: 15, 9: 15, // Buildings
 };
 // Per-swing hit tracking: each swing gets a unique ID, each enemy/resource can be hit once per swing
 let _swingId = 0; // increments each new swing
@@ -11399,6 +11399,7 @@ function update(timestamp = 0) {
     if (_solidCount >= _SOLID_POOL.length) break;
     const _s = _SOLID_POOL[_solidCount++];
     _s.x = b.x; _s.y = b.y; _s.rad = _BLD_RADII[b.type];
+    _s.type = b.type; _s.tier = b.tier || 0; _s.ownerId = b._ownerId; _s.netId = b._netId || b.id; _s.ownerClanId = b.ownerClanId;
   }
   // Kaynaklar sonra — yalnızca oyuncunun komşu grid hücrelerini sorgula.
   // Tam resources taraması her karede gereksiz O(N) maliyet oluşturuyordu.
@@ -11409,6 +11410,7 @@ function update(timestamp = 0) {
     if (_solidCount >= _SOLID_POOL.length) break;
     const _s = _SOLID_POOL[_solidCount++];
     _s.x = r.x; _s.y = r.y; _s.rad = (r.radius || 40) * (_RES_COL_FRAC[r.type] || 0.60);
+    _s.type = 0; _s.tier = 0; _s.ownerId = null; _s.netId = null; _s.ownerClanId = null;
   }
 
   // 5 geçişli tam push — her geçiş overlap'i tam sıfırlar, içinden geçişi engeller
@@ -11432,6 +11434,23 @@ function update(timestamp = 0) {
         // Momentum: dik bileşeni durdur, teğet kayma yüzde 85 korunur
         const mDot = player.momX * nx + player.momY * ny;
         if (mDot < 0) { player.momX -= mDot * nx * 0.85; player.momY -= mDot * ny * 0.85; }
+
+        // Spike (Kazık / Diken) Temas Hasarı: düşman dikenine temas eden oyuncu hasar alır
+        if (obj.type === 3 && obj.ownerId && obj.ownerId !== _mySocketId && !(obj.ownerClanId && player.clanId && obj.ownerClanId === player.clanId)) {
+          const _nowMs = Date.now();
+          if (_nowMs - (player._lastSpikeHitTime || 0) > 320) {
+            player._lastSpikeHitTime = _nowMs;
+            const spikeTier = obj.tier || 0;
+            const spikeDmg = Math.min(180, Math.max(20, [35, 60, 95, 140, 190, 260][spikeTier] || 45));
+            player.hp = Math.max(0, player.hp - spikeDmg);
+            spawnBlood(player.x, player.y, 6);
+            playSound(140, 0.12, 'sawtooth', 0.28);
+            floatingTexts.push({ x: player.x, y: player.y - 35, text: `-${spikeDmg} 🗡️`, alpha: 1, life: 35, color: '#ff4444', big: true });
+            if (_connected && _socket && obj.netId) {
+              _socket.emit('player_hit_spike', { buildingId: obj.netId, spikeOwnerId: obj.ownerId, dmg: spikeDmg });
+            }
+          }
+        }
       }
     }
   }
@@ -11479,18 +11498,22 @@ function update(timestamp = 0) {
         const nx = dx / d, ny = dy / d;
         const overlap = minD - d;
 
-        if (typeof _myTrapVictims !== 'undefined' && _myTrapVictims && typeof _myTrapVictims.has === 'function' && _myTrapVictims.has(opId)) {
-          // ── TUZAK SAHİBİ MEKANİĞİ ────────────────────────────────────────
-          // FIX: Apply immediate client-side push AND notify server
-          const pushForce = overlap * 0.85; // Increased push force
-          player.x += nx * pushForce;
-          player.y += ny * pushForce;
-          if (_socket) {
-            _socket.emit('trap_owner_push', { victimId: opId, dx: -nx * pushForce, dy: -ny * pushForce });
-          }
-        } else if (typeof _trapCaughtBy !== 'undefined' && _trapCaughtBy) {
-          player.x += nx * overlap * 0.25;
-          player.y += ny * overlap * 0.25;
+        if (p._trappedBy) {
+          // Trap owner / moving player pushes trapped victim (slow, smooth, Moomoo.io style)
+          const pushSpeed = Math.min(overlap * 0.35, 2.0);
+          p.x -= nx * pushSpeed;
+          p.y -= ny * pushSpeed;
+          p._trappedX = p.x;
+          p._trappedY = p.y;
+          // Player slides around the victim without getting stuck
+          const dot = player.vx * nx + player.vy * ny;
+          if (dot < 0) { player.vx -= dot * nx * 0.5; player.vy -= dot * ny * 0.5; }
+        } else if (_trapCaughtBy) {
+          // Local player is trapped: absorbs push smoothly
+          player.x += nx * Math.min(overlap * 0.35, 2.0);
+          player.y += ny * Math.min(overlap * 0.35, 2.0);
+          _trapCaughtX = player.x;
+          _trapCaughtY = player.y;
         } else {
           // Normal çift yönlü itme
           const push = overlap * 0.55;
@@ -12432,7 +12455,7 @@ canvas.addEventListener('mouseup', e => {
     _attackPending = false;
   }
 });
-window.addEventListener('blur', () => { _attackPending = false; _attackQueued = false; });
+window.addEventListener('blur', () => { keys = {}; });
 
 // ============================================================
 // MULTIPLAYER — WebSocket / Socket.io
@@ -12675,21 +12698,8 @@ function initMultiplayer() {
         if (s.hp   !== undefined) existing.hp          = s.hp;
         if (s.mhp  !== undefined) existing.maxHp       = s.mhp;
         if (s.w    !== undefined) existing.weapon      = s.w;
-        // Remote player attack animation sync: never abort active local swing animation
-        if (s.atk) {
-          if (!existing.isAttacking || existing.attackTimer === 0) {
-            existing.isAttacking = true;
-            existing.attackTimer = 1;
-            existing.attackDuration = s.atd || (existing.weapon === 2 ? 14 : 18);
-          }
-        } else {
-          // If remote player is not currently in an active swing cycle, sync idle state
-          if (!existing.isAttacking || existing.attackTimer === 0) {
-            existing.isAttacking = false;
-            existing.attackTimer = 0;
-          }
-        }
-        if (s.atd  !== undefined && (!existing.isAttacking || existing.attackTimer === 0)) existing.attackDuration = s.atd;
+        // Discrete swings are triggered strictly via 'remote_swing' event to prevent double-swings
+        if (s.atd !== undefined) existing.attackDuration = s.atd;
         if (s.k    !== undefined) existing.kills       = s.k;
         if (s.xp   !== undefined) existing.xp          = s.xp;
         if (s.sk) existing.skin = s.sk;
@@ -13908,21 +13918,25 @@ let _bgTabHeartbeat = null;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     // When tab is hidden, browsers freeze requestAnimationFrame.
-    // Run a 200ms background interval to maintain connection, sync state, and allow mobs/PvP to hit us.
+    // Run update() and _mpUpdate() via a 33ms interval (30Hz) so player continues to simulate, move, attack, and sync in background!
     if (!_bgTabHeartbeat) {
       _bgTabHeartbeat = setInterval(() => {
-        if (_connected && _socket && player && !player.dead) {
-          _mpSendState();
-        }
-      }, 200);
+        try {
+          if (!_isDying && player && !player.dead) {
+            update();
+            _mpUpdate();
+          }
+        } catch (_) {}
+      }, 33);
     }
   } else {
     if (_bgTabHeartbeat) {
       clearInterval(_bgTabHeartbeat);
       _bgTabHeartbeat = null;
     }
+    _lastTime = performance.now();
     if (_connected && _socket && player && !player.dead) {
-      _mpSendState();
+      _mpUpdate();
     }
   }
 });
@@ -14412,23 +14426,22 @@ function checkBuildingDamage() {
           if (Math.abs(_opdx) > 76 || Math.abs(_opdy) > 76 || _opd2 > 5776) continue;
           var _bSpikeId = bp._netId || (bp._bLid = bp._bLid || ++_eLidCounter);
           var spCdKey = 'pvp_spike_' + opId + '_' + _bSpikeId;
-          if (now - (_spikeEnemyCooldowns.get(spCdKey) || 0) < 500) continue;
+          if (now - (_spikeEnemyCooldowns.get(spCdKey) || 0) < 350) continue;
           _spikeEnemyCooldowns.set(spCdKey, now);
           var spikePvpDmg = Math.round(60 * (TIER_DMG_MULS[_getTier(bp)] || 1));
-          _socket.emit('spike_hit', { targetId: opId, bId: bp._netId, dmg: spikePvpDmg });
+          _socket.emit('spike_hit', { targetId: opId, buildingId: bp._netId, bId: bp._netId, dmg: spikePvpDmg });
           spawnBlood(op.x, op.y, 5);
           floatingTexts.push({ x: op.x, y: op.y - 32, text: '-' + spikePvpDmg + ' \uD83D\uDDE1\uFE0F', alpha: 1, life: 30, color: '#ffaa44' });
         }
-        // Trap PvP
+        // Trap PvP (Zero Damage — Moomoo.io style: only root, no blood, no damage)
         if (bp.type === 6) {
-          var trapR = (bp.radius || 42) + 32;
+          var trapR = 28;
           if (Math.abs(_opdx) > trapR || Math.abs(_opdy) > trapR || _opd2 > trapR * trapR) continue;
           var trCdKey = 'trap_pvp_' + opId + '_' + bp._netId;
-          if (now - (_spikeEnemyCooldowns.get(trCdKey) || 0) < 600) continue;
+          if (now - (_spikeEnemyCooldowns.get(trCdKey) || 0) < 1000) continue;
           _spikeEnemyCooldowns.set(trCdKey, now);
           _socket.emit('trap_touch', { victimId: opId, buildingId: bp._netId });
           _myTrapVictims.set(opId, bp._netId);
-          spawnBlood(op.x, op.y, 5);
           playSound(140, 0.14, 'sawtooth', 0.25);
         }
       }
