@@ -3110,6 +3110,12 @@ const SKIN_ARM_COLORS = {
   kiz_orman:'#78bc40',kiz_vampir:'#3a0050',kiz_neon:'#100820',
   kiz_samurai:'#4a0808',kiz_karanlik:'#150830',kiz_peri:'#ffb8cc'
 };
+const SKIN_HAND_ACCENTS = {
+  default:'#9b6a46',panda:'#777777',fox:'#ffd0a8',wolf:'#a8c0d4',rabbit:'#f08ca8',croc:'#7fbd58',frog:'#b5ef72',polarbear:'#c9e8f4',
+  penguin:'#8ad7ed',shark:'#a8d8ef',lion:'#ffe08a',dragon:'#69c980',skull:'#ffffff',ninja:'#5d6680',robot:'#d9f2ff',phoenix:'#ffb36b',
+  yeti:'#e8f8ff',octopus:'#f0a0ff',kiz_sakura:'#fff0f7',kiz_deniz:'#a8fff0',kiz_ates:'#ff8d64',kiz_buz:'#e4ffff',
+  kiz_orman:'#c4f28a',kiz_vampir:'#b879d9',kiz_neon:'#8affee',kiz_samurai:'#e89090',kiz_karanlik:'#ba8cff',kiz_peri:'#fff0fa'
+};
 const _spawn = randomForestPoint();
 const player = {
   name: playerName,
@@ -9728,6 +9734,24 @@ function _hexDimColor(hex, amt) {
 }
 // Cache: only recompute armDark when the skin changes (not every frame).
 let _cachedArmSkin = null, _cachedArmDark = '';
+function drawSkinHand(c, skin, armCol, armDark, sign) {
+  if (_qualityLevel >= 2) {
+    const ag = c.createRadialGradient(-4, sign * -4, 0, 0, 0, 16);
+    ag.addColorStop(0, armCol); ag.addColorStop(0.55, armCol); ag.addColorStop(1, armDark);
+    c.fillStyle = ag;
+  } else {
+    c.fillStyle = armCol;
+  }
+  c.strokeStyle = 'rgba(0,0,0,0.62)'; c.lineWidth = 2.2;
+  c.beginPath(); c.ellipse(8, 0, 18, 13, 0.12 * sign, 0, Math.PI * 2); c.fill(); c.stroke();
+  const accent = SKIN_HAND_ACCENTS[skin] || GENERATED_SKIN_STYLES[skin]?.[2] || armDark;
+  c.strokeStyle = accent; c.lineWidth = 1.5; c.lineCap = 'round';
+  c.beginPath(); c.arc(8, 0, 9, -1.05 + sign * 0.12, 0.35 + sign * 0.12); c.stroke();
+  if (_qualityLevel >= 1) {
+    c.fillStyle = 'rgba(255,255,255,0.22)';
+    c.beginPath(); c.ellipse(2, -3 * sign, 7, 4, 0.2 * sign, 0, Math.PI * 2); c.fill();
+  }
+}
 
 function drawPlayer() {
   ctx.save(); ctx.translate(player.x, player.y);
@@ -9828,22 +9852,7 @@ function drawPlayer() {
     const armX = player.weapon === 2 ? 38 : 30;
     const armY = ay - (player.weapon === 2 ? 2 : 0);
     ctx.save(); ctx.translate(armX, armY);
-    // Forearm oval — gradient at HIGH quality only; flat at medium/potato
-    // PERF: createRadialGradient per arm per frame was costing 4 gradient creates/frame
-    if (_qualityLevel >= 2) {
-      const ag = ctx.createRadialGradient(-4,sign*-4,0,0,0,16);
-      ag.addColorStop(0, armCol); ag.addColorStop(0.55, armCol); ag.addColorStop(1, armDark);
-      ctx.fillStyle = ag;
-    } else {
-      ctx.fillStyle = armCol;
-    }
-    ctx.strokeStyle = '#000'; ctx.lineWidth = 4.5;
-    ctx.beginPath(); ctx.ellipse(8,0,18,13,0.12*sign,0,Math.PI*2); ctx.fill(); ctx.stroke();
-    // Knuckle highlight (quality 1+)
-    if (_qualityLevel >= 1) {
-      ctx.fillStyle = 'rgba(255,255,255,0.22)';
-      ctx.beginPath(); ctx.ellipse(2,-3*sign,7,4,0.2*sign,0,Math.PI*2); ctx.fill();
-    }
+    drawSkinHand(ctx, _playerSkin, armCol, armDark, sign);
     // Finger detail lines (quality 2 only — 3 extra stroke calls per arm)
     if (_qualityLevel >= 2) {
       ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
@@ -14068,18 +14077,13 @@ function drawOtherPlayers() {
 
         // Arms — same two-ellipse style for ALL weapon modes (weapon + building)
         const armCol = SKIN_ARM_COLORS[p.skin] || '#c4966a';
+        const armDark = armCol.startsWith('#') ? _hexDimColor(armCol, 0.7) : armCol;
         for (let _pai = 0; _pai < 2; _pai++) {
           const ay = _pai === 0 ? -13 : 20, sign = _pai === 0 ? -1 : 1;
           const armX = p.weapon === 2 ? 38 : 30;
           const armY = ay - (p.weapon === 2 ? 2 : 0);
           ctx.save(); ctx.translate(armX, armY);
-          ctx.fillStyle = armCol;
-          ctx.strokeStyle = '#000'; ctx.lineWidth = 4.5;
-          ctx.beginPath(); ctx.ellipse(8,0,18,13,0.12*sign,0,Math.PI*2); ctx.fill(); ctx.stroke();
-          if (_qualityLevel >= 1) {
-            ctx.fillStyle = 'rgba(255,255,255,0.22)';
-            ctx.beginPath(); ctx.ellipse(2,-3*sign,7,4,0.2*sign,0,Math.PI*2); ctx.fill();
-          }
+          drawSkinHand(ctx, p.skin, armCol, armDark, sign);
           ctx.restore();
         }
         ctx.restore(); // undo swAng

@@ -933,13 +933,13 @@ function compactState(state, full = false) {
     bx: typeof state.buildX === 'number' ? Math.round(state.buildX) : null, by: typeof state.buildY === 'number' ? Math.round(state.buildY) : null,
     sq: state.stateSeq || 0, tm: state.stateAt || Date.now(),
     trappedBy: state.trappedBy || null, trappedX: state.trappedX ?? null, trappedY: state.trappedY ?? null,
+    color: state.color || '#8B5E3A',
+    acc: state.acc || {},
   };
   if (full) {
-    res.color = state.color || '#8B5E3A';
     res.team = state.team || '';
     res.clanId = state.clanId || '';
     res.clanTag = state.clanTag || '';
-    res.acc = state.acc || {};
   }
   return res;
 }
