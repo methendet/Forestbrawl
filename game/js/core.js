@@ -3078,8 +3078,8 @@ let _isDying = false; // guard against double-die (pvp_hit + pvp_killed race)
 // PLAYER
 // ============================================================
 const ATTACK_DUR = {
-  1: 18,   // Axe (~300ms, Moomoo.io cadence)
-  2: 14,   // Katana / Sword (~230ms, Moomoo.io cadence)
+  1: 20,   // Axe: quick strike, heavier return
+  2: 16,   // Sword: quick strike, controlled return
   3: 15, 4: 15, 5: 15, 6: 15, 7: 15, 8: 15, 9: 15, // Buildings
 };
 // Per-swing hit tracking: each swing gets a unique ID, each enemy/resource can be hit once per swing
@@ -9781,7 +9781,7 @@ function drawPlayer() {
     } else {
       // Asymmetric swing: reach peak at PEAK_T (fast strike), return slowly after.
       // prog goes 0→1; remap squishes 0→PEAK_T to 0→1 fast, PEAK_T→1 to 1→0 slow.
-      const PEAK_T = player.weapon === 2 ? 0.38 : 0.28;
+      const PEAK_T = player.weapon === 2 ? 0.34 : 0.24;
       const remap = prog < PEAK_T
         ? prog / PEAK_T
         : 1.0 - (prog - PEAK_T) / (1.0 - PEAK_T);
@@ -9791,7 +9791,7 @@ function drawPlayer() {
 
   // Draw clean .io-style weapon swing arc (kavis cizgisi)
   if (player.isAttacking && player.weapon < 3 && player.attackTimer > 0) {
-    const _swProg = player.attackTimer / (player.attackDuration || (player.weapon === 2 ? 14 : 18));
+    const _swProg = player.attackTimer / (player.attackDuration || ATTACK_DUR[player.weapon] || 20);
     _drawWeaponSlashArc(ctx, _swProg, player.weapon);
   }
 
@@ -10068,7 +10068,7 @@ function _interpOtherPlayers() {
 
     // 60 FPS local attackTimer advancement for smooth weapon & arm swing animation
     if (p.isAttacking) {
-      const dur = p.attackDuration || (p.weapon === 2 ? 14 : 18);
+      const dur = p.attackDuration || ATTACK_DUR[p.weapon] || 20;
       p.attackTimer = (p.attackTimer || 0) + _dt;
       if (p.attackTimer >= dur) {
         p.isAttacking = false;
@@ -10545,7 +10545,7 @@ function update(timestamp = 0) {
     }
   }
   if (player.isAttacking) {
-    const dur = player.attackDuration || (player.weapon === 2 ? 14 : 18);
+    const dur = player.attackDuration || ATTACK_DUR[player.weapon] || 20;
     player.attackTimer += _dt * (1 / (player.atkSpdBonus || 1));
 
     // Full swing cycle completes when attackTimer reaches duration (swung out and returned to hand)
@@ -11998,7 +11998,7 @@ function update(timestamp = 0) {
 
   // Layer 6a: swing hit spark at weapon tip (no arc/trail overlay)
   if (player.isAttacking && player.weapon < 3 && player.attackTimer > 0) {
-    const prog = player.attackTimer / player.attackDuration;
+    const prog = player.attackTimer / (player.attackDuration || ATTACK_DUR[player.weapon] || 20);
     const swingPeak = Math.sin(prog * Math.PI);
     const hitRange = _swingHitRange();
     if (swingPeak > 0.55 && Math.random() < 0.4) {
@@ -13254,7 +13254,7 @@ function initMultiplayer() {
   });
 
   // Remote swing event from server — instant 60 FPS attack animation
-  _socket.on('remote_swing', ({ id, weapon, axeTier, swordTier, angle }) => {
+  _socket.on('remote_swing', ({ id, weapon, axeTier, swordTier, angle, attackDuration }) => {
     const other = _otherPlayers.get(id);
     if (other) {
       other.weapon = weapon || other.weapon || 1;
@@ -13266,7 +13266,9 @@ function initMultiplayer() {
       }
       other.isAttacking = true;
       other.attackTimer = 1;
-      other.attackDuration = ATTACK_DUR[other.weapon] || (other.weapon === 2 ? 14 : 18);
+      other.attackDuration = Number.isFinite(attackDuration)
+        ? Math.max(1, attackDuration)
+        : (ATTACK_DUR[other.weapon] || 20);
     }
   });
 
@@ -14038,12 +14040,12 @@ function drawOtherPlayers() {
         let swAng = 0;
         let prog = 0;
         if (p.isAttacking && p.attackTimer > 0) {
-          const dur = p.attackDuration || (p.weapon === 2 ? 14 : 18);
+          const dur = p.attackDuration || ATTACK_DUR[p.weapon] || 20;
           prog = Math.max(0, Math.min(1, p.attackTimer / dur));
           if (p.weapon >= 3) {
             swAng = Math.sin(prog * Math.PI) * 0.2;
           } else {
-            const peakT = p.weapon === 2 ? 0.38 : 0.28;
+            const peakT = p.weapon === 2 ? 0.34 : 0.24;
             const remap = prog < peakT ? prog / peakT : 1 - (prog - peakT) / (1 - peakT);
             swAng = Math.sin(remap * Math.PI * 0.5) * (p.weapon === 2 ? (Math.PI / 1.2) : (Math.PI / 1.5));
           }

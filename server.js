@@ -72,6 +72,10 @@ const MOB_TYPES = [
   { shape: 'bear', color: '#4a2f1b', outline: '#1a1008', eyes: '#ffaa00', typeName: '🐻 Ayı', radius: 65, hp: 950, dmg: 72, speed: 14, wanderSpeed: 8, xpReward: 320, goldReward: 30 },
   { shape: 'spider', color: '#2a1a38', outline: '#0f0814', eyes: '#ff1100', typeName: '🕷️ Örümcek', radius: 48, hp: 380, dmg: 34, speed: 17, wanderSpeed: 9, xpReward: 100, goldReward: 12 },
 ];
+const PLAYER_ATTACK_TIMING = {
+  1: { duration: 20, cooldown: 200 },
+  2: { duration: 16, cooldown: 165 }
+};
 const legacyDataFile = process.env.DATA_FILE || path.join(__dirname, 'forest-data.json');
 const databaseFile = process.env.DATABASE_FILE || path.join(__dirname, 'forestbrawl.db');
 let sqliteDb = null;
@@ -1882,7 +1886,8 @@ io.on('connection', (socket) => {
     const now = Date.now();
     const swingId = Number(data.swingId);
     if (Number.isSafeInteger(swingId) && attacker.lastSwingId === swingId) return;
-    const swingCooldown = weapon === 2 ? 170 : 220;
+    const attackTiming = PLAYER_ATTACK_TIMING[weapon];
+    const swingCooldown = attackTiming.cooldown;
     if (now - (attacker.lastSwingAt || 0) < swingCooldown) return;
     attacker.lastSwingAt = now;
     if (Number.isSafeInteger(swingId)) attacker.lastSwingId = swingId;
@@ -1901,14 +1906,15 @@ io.on('connection', (socket) => {
     attacker.weapon = weapon;
     attacker.isAttacking = true;
     attacker.attackTimer = 1;
-    attacker.attackDuration = weapon === 2 ? 14 : 18;
+    attacker.attackDuration = attackTiming.duration;
 
     relayToOthers(socket, 'remote_swing', {
       id: socket.id,
       weapon,
       axeTier: data.axeTier,
       swordTier: data.swordTier,
-      angle
+      angle,
+      attackDuration: attackTiming.duration
     });
 
     // Lag compensation: rewind target positions to attacker's perspective (~40-100ms in past)
