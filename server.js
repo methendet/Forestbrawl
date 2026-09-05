@@ -1880,9 +1880,12 @@ io.on('connection', (socket) => {
     if ((attacker.hp ?? 250) <= 0) attacker.hp = 250;
     const weapon = Number(data.weapon) === 2 ? 2 : 1;
     const now = Date.now();
+    const swingId = Number(data.swingId);
+    if (Number.isSafeInteger(swingId) && attacker.lastSwingId === swingId) return;
     const swingCooldown = weapon === 2 ? 170 : 220;
     if (now - (attacker.lastSwingAt || 0) < swingCooldown) return;
     attacker.lastSwingAt = now;
+    if (Number.isSafeInteger(swingId)) attacker.lastSwingId = swingId;
     const range = weapon === 2 ? 140 : 128;
     const spread = weapon === 2 ? Math.PI / 3.25 : Math.PI / 2.57;
     const tier = Math.max(0, Math.min(5, Number(weapon === 2 ? data.swordTier : data.axeTier) || 0));
@@ -2388,9 +2391,14 @@ io.on('connection', (socket) => {
       }
     }
   });
-  socket.on('building_hit', ({ id, dmg } = {}) => {
+  socket.on('building_hit', ({ id, dmg, swingId } = {}) => {
     const building = buildings.get(id);
     if (!building) return;
+    const attacker = players.get(socket.id);
+    const numericSwingId = Number(swingId);
+    const hitId = `${id}:${numericSwingId}`;
+    if (attacker && Number.isSafeInteger(numericSwingId) && attacker.lastBuildingHitId === hitId) return;
+    if (attacker && Number.isSafeInteger(numericSwingId)) attacker.lastBuildingHitId = hitId;
     const maxDamage = Number(building.type) === 6 ? 45 : 120;
     building.hp = Math.max(0, (building.hp ?? building.maxHp ?? 100) - Math.max(1, Math.min(maxDamage, Number(dmg) || 1)));
     io.emit('build_hp_update', { id, hp: building.hp });

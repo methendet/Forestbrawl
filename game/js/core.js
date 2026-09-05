@@ -4142,6 +4142,7 @@ function _queueBuildMetaUpdate(delta) {
 // ============================================================
 let _joystickActive = false;
 let _joystickMoveX = 0, _joystickMoveY = 0;
+let activeAttackInput = false;
 let _entryConsentAccepted = false;
 function _controlsAllowed() {
   const consent = document.getElementById('entry-consent');
@@ -4161,6 +4162,7 @@ function setupJoy(zoneId, stickId, isMove) {
 
   const begin = e => {
     e.preventDefault();
+    if (typeof e.stopPropagation === 'function') e.stopPropagation();
     if (!_controlsAllowed()) return;
     if (active || (e.pointerType === 'mouse' && e.button !== 0)) return;
     currentId = e.pointerId; active = true; lastDist = 0;
@@ -4204,8 +4206,10 @@ function setupJoy(zoneId, stickId, isMove) {
     } else {
       player.angle = ang;
       const doAtk = dist > 8;
-      _attackPending = doAtk;
-      if (doAtk) _attackQueued = true;
+      // A joystick press is a single attack, even while pointermove updates its aim.
+      _attackPending = doAtk && player.weapon >= 3;
+      if (doAtk && !activeAttackInput) _attackQueued = true;
+      activeAttackInput = doAtk;
     }
   }
 
@@ -4240,6 +4244,7 @@ function setupJoy(zoneId, stickId, isMove) {
       }
       if (player.weapon >= 3 && _attackPending) tryPlaceBuilding();
       _attackPending = false;
+      activeAttackInput = false;
     }
   };
   zone.addEventListener('pointerup', end);
@@ -5019,7 +5024,7 @@ function checkHits() {
 
       // Tell server about damage to ANY building — server broadcasts to ALL players
       if (b._netId && _connected && _socket) {
-        _socket.emit('building_hit', { id: b._netId, dmg: bDmg });
+        _socket.emit('building_hit', { id: b._netId, dmg: bDmg, swingId: _swingId });
       }
 
       // If destroyed — notify server/remove
