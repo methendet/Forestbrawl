@@ -73,8 +73,8 @@ const MOB_TYPES = [
   { shape: 'spider', color: '#2a1a38', outline: '#0f0814', eyes: '#ff1100', typeName: '🕷️ Örümcek', radius: 48, hp: 380, dmg: 34, speed: 17, wanderSpeed: 9, xpReward: 100, goldReward: 12 },
 ];
 const PLAYER_ATTACK_TIMING = {
-  1: { duration: 20, cooldown: 200 },
-  2: { duration: 16, cooldown: 165 }
+  1: { duration: 23, cooldown: 230 },
+  2: { duration: 19, cooldown: 190 }
 };
 const legacyDataFile = process.env.DATA_FILE || path.join(__dirname, 'forest-data.json');
 const databaseFile = process.env.DATABASE_FILE || path.join(__dirname, 'forestbrawl.db');

@@ -3078,8 +3078,8 @@ let _isDying = false; // guard against double-die (pvp_hit + pvp_killed race)
 // PLAYER
 // ============================================================
 const ATTACK_DUR = {
-  1: 20,   // Axe: quick strike, heavier return
-  2: 16,   // Sword: quick strike, controlled return
+  1: 23,   // Axe: quick strike, heavier return
+  2: 19,   // Sword: quick strike, controlled return
   3: 15, 4: 15, 5: 15, 6: 15, 7: 15, 8: 15, 9: 15, // Buildings
 };
 // Per-swing hit tracking: each swing gets a unique ID, each enemy/resource can be hit once per swing
@@ -9805,7 +9805,7 @@ function drawPlayer() {
     } else {
       // Asymmetric swing: reach peak at PEAK_T (fast strike), return slowly after.
       // prog goes 0→1; remap squishes 0→PEAK_T to 0→1 fast, PEAK_T→1 to 1→0 slow.
-      const PEAK_T = player.weapon === 2 ? 0.34 : 0.24;
+      const PEAK_T = player.weapon === 2 ? 0.30 : 0.20;
       const remap = prog < PEAK_T
         ? prog / PEAK_T
         : 1.0 - (prog - PEAK_T) / (1.0 - PEAK_T);
@@ -14056,7 +14056,7 @@ function drawOtherPlayers() {
           if (p.weapon >= 3) {
             swAng = Math.sin(prog * Math.PI) * 0.2;
           } else {
-            const peakT = p.weapon === 2 ? 0.34 : 0.24;
+            const peakT = p.weapon === 2 ? 0.30 : 0.20;
             const remap = prog < peakT ? prog / peakT : 1 - (prog - peakT) / (1 - peakT);
             swAng = Math.sin(remap * Math.PI * 0.5) * (p.weapon === 2 ? (Math.PI / 1.2) : (Math.PI / 1.5));
           }
