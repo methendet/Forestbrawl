@@ -12460,6 +12460,8 @@ canvas.addEventListener('pointerdown', e => {
   _handleBuildInteraction(e);
 });
 canvas.addEventListener('mousedown', e => {
+  // Pointer-capable browsers already handled this input in pointerdown.
+  if ('PointerEvent' in window) return;
   if (e.button === 0) _handleBuildInteraction(e);
   if (e.button === 2) { e.preventDefault(); fireBowArrow(); }
 });
